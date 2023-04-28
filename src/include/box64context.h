@@ -57,7 +57,9 @@ typedef struct needed_libs_s {
 
 void free_neededlib(needed_libs_t* needed);
 needed_libs_t* new_neededlib(int n);
+needed_libs_t* copy_neededlib(needed_libs_t* needed);
 void add1_neededlib(needed_libs_t* needed);
+void add1lib_neededlib(needed_libs_t* needed, library_t* lib, const char* name);
 
 typedef struct base_segment_s {
     uintptr_t       base;
@@ -107,7 +109,7 @@ typedef struct box64context_s {
 
     lib_t               *maplib;        // lib and symbols handling
     lib_t               *local_maplib;  // libs and symbols openned has local (only collection of libs, no symbols)
-    dic_t               *versym;        // dictionnary of versionned symbols
+    dic_t               *versym;        // dictionnary of versioned symbols
 
     kh_threadstack_t    *stacksizes;    // stack sizes attributes for thread (temporary)
     bridge_t            *system;        // other bridges
@@ -118,8 +120,6 @@ typedef struct box64context_s {
     kh_symbolmap_t      *almymap;       // link to the mysymbolmap if libOpenAL
     kh_symbolmap_t      *vkwrappers;    // the map of wrapper for VulkanProcs (TODO: check SDL2)
     kh_symbolmap_t      *vkmymap;       // link to the mysymbolmap of libGL
-    kh_defaultversion_t *globaldefver;  // the global default version for symbols (the XXX@@vvvv of symbols)
-    kh_defaultversion_t *weakdefver;    // the weak default version for symbols (the XXX@@vvvv of symbols)
     vkprocaddess_t      vkprocaddress;
 
     #ifndef DYNAREC
@@ -136,6 +136,7 @@ typedef struct box64context_s {
     uint32_t            mutex_bridge;
     uintptr_t           max_db_size;    // the biggest (in x86_64 instructions bytes) built dynablock
     int                 trace_dynarec;
+    pthread_mutex_t     mutex_lock;     // this is for the Test interpreter
     #endif
 
     library_t           *libclib;       // shortcut to libc library (if loaded, so probably yes)
@@ -148,10 +149,10 @@ typedef struct box64context_s {
     void*               sdl2allocrw;    // SDL2 AllocRW/FreeRW function
     void*               sdl2freerw;
 
-    int                 deferedInit;
-    elfheader_t         **deferedInitList;
-    int                 deferedInitSz;
-    int                 deferedInitCap;
+    int                 deferredInit;
+    elfheader_t         **deferredInitList;
+    int                 deferredInitSz;
+    int                 deferredInitCap;
 
     pthread_key_t       tlskey;     // then tls key to have actual tlsdata
     void*               tlsdata;    // the initial global tlsdata
@@ -214,6 +215,8 @@ void print_cycle_log(int loglevel);
 
 // return the index of the added header
 int AddElfHeader(box64context_t* ctx, elfheader_t* head);
+// remove an elf from list (but list is never reduced, so there can be holes)
+void RemoveElfHeader(box64context_t* ctx, elfheader_t* head);
 
 // return the tlsbase (negative) for the new TLS partition created (no partition index is stored in the context)
 int AddTLSPartition(box64context_t* context, int tlssize);

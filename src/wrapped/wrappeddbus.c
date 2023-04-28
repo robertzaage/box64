@@ -349,6 +349,31 @@ static void* finddbus_internal_padFct(void* fct)
     printf_log(LOG_NONE, "Warning, no more slot for dbus dbus_internal_pad callback\n");
     return NULL;
 }
+
+// DBusNewConnectionFunction
+#define GO(A)   \
+static uintptr_t my_DBusNewConnectionFunction_fct_##A = 0;                      \
+static void my_DBusNewConnectionFunction_##A(void* a, void* b, void* c)         \
+{                                                                               \
+    RunFunction(my_context, my_DBusNewConnectionFunction_fct_##A, 3, a, b, c);  \
+}
+SUPER()
+#undef GO
+static void* findDBusNewConnectionFunctionFct(void* fct)
+{
+    if(!fct) return NULL;
+    if(GetNativeFnc((uintptr_t)fct))  return GetNativeFnc((uintptr_t)fct);
+    #define GO(A) if(my_DBusNewConnectionFunction_fct_##A == (uintptr_t)fct) return my_DBusNewConnectionFunction_##A;
+    SUPER()
+    #undef GO
+    #define GO(A) if(my_DBusNewConnectionFunction_fct_##A == 0) {my_DBusNewConnectionFunction_fct_##A = (uintptr_t)fct; return my_DBusNewConnectionFunction_##A; }
+    SUPER()
+    #undef GO
+    printf_log(LOG_NONE, "Warning, no more slot for dbus DBusNewConnectionFunction callback\n");
+    return NULL;
+}
+
+
 #undef SUPER
 
 EXPORT void my_dbus_timeout_set_data(x64emu_t* emu, void* e, void* p, void* f)
@@ -404,7 +429,64 @@ EXPORT int my_dbus_message_append_args_valist(x64emu_t* emu, void* message, int 
     #ifdef CONVERT_VALIST
     CONVERT_VALIST(b);
     #else
+    #if 1
     CREATE_VALIST_FROM_VALIST(b, emu->scratch);
+    #else
+    va_list sysv_varargs;
+    uintptr_t *p = (uintptr_t*)(emu->scratch);
+    int n = (X64_VA_MAX_REG - b->gp_offset)/8;
+    int x = (X64_VA_MAX_XMM - b->fp_offset)/8;
+    int idx = 0;
+    int type = arg;
+    while(arg) {
+        if(arg == (int)'d') {
+            // double
+            if(x)
+                *(p++) = *(uintptr_t*)(b->reg_save_area + X64_VA_MAX_XMM - (x--)*8);
+            else
+                *(p++) = *(uintptr_t*)(b->overflow_arg_area + (idx++)*8);
+        } else if(arg == (int)'a') {
+            // array
+            //  type
+            if(n)
+                *(p++) = *(uintptr_t*)(b->reg_save_area + X64_VA_MAX_REG - (n--)*8);
+            else
+                *(p++) = *(uintptr_t*)(b->overflow_arg_area + (idx++)*8);
+            //  elements
+            if(n)
+                *(p++) = *(uintptr_t*)(b->reg_save_area + X64_VA_MAX_REG - (n--)*8);
+            else
+                *(p++) = *(uintptr_t*)(b->overflow_arg_area + (idx++)*8);
+            //  number of elements
+            if(n)
+                *(p++) = *(uintptr_t*)(b->reg_save_area + X64_VA_MAX_REG - (n--)*8);
+            else
+                *(p++) = *(uintptr_t*)(b->overflow_arg_area + (idx++)*8);
+        } else if(arg == (int)'s' || arg == (int)'g' || arg == (int)'o') {
+            //  elements
+            if(n)
+                *(p++) = *(uintptr_t*)(b->reg_save_area + X64_VA_MAX_REG - (n--)*8);
+            else
+                *(p++) = *(uintptr_t*)(b->overflow_arg_area + (idx++)*8);
+            //  number of elements
+            if(n)
+                *(p++) = *(uintptr_t*)(b->reg_save_area + X64_VA_MAX_REG - (n--)*8);
+            else
+                *(p++) = *(uintptr_t*)(b->overflow_arg_area + (idx++)*8);
+        } else {
+            if(n)
+                *(p++) = *(uintptr_t*)(b->reg_save_area + X64_VA_MAX_REG - (n--)*8);
+            else
+                *(p++) = *(uintptr_t*)(b->overflow_arg_area + (idx++)*8);
+        }
+        if(n)
+            arg = *(uintptr_t*)(b->reg_save_area + X64_VA_MAX_REG - (n--)*8);
+        else
+            arg = *(uintptr_t*)(b->overflow_arg_area + (idx++)*8);
+        *(p++) = arg;
+    }
+    sysv_varargs = (va_list)p;
+    #endif
     #endif
     return my->dbus_message_append_args_valist(message, arg, VARARGS);
 }
@@ -506,7 +588,25 @@ EXPORT int my_dbus_connection_try_register_fallback(x64emu_t* emu, void* connect
     return my->dbus_connection_try_register_fallback(connection, path, vtable?&vt:NULL, data, error);
 }
 
+EXPORT int my_dbus_server_set_watch_functions(x64emu_t* emu, void* server, void* add, void* rem, void* toggle, void* data, void* d)
+{
+    return my->dbus_server_set_watch_functions(server, findDBusAddWatchFunctionFct(add), findDBusRemoveWatchFunctionFct(rem), findDBusWatchToggledFunctionFct(toggle), data, find_DBusFreeFunction_Fct(d));
+}
 
+EXPORT void my_dbus_server_set_new_connection_function(x64emu_t* emu, void* server, void* f, void* data, void* d)
+{
+    my->dbus_server_set_new_connection_function(server, findDBusNewConnectionFunctionFct(f), data, find_DBusFreeFunction_Fct(d));
+}
+
+EXPORT int my_dbus_server_set_timeout_functions(x64emu_t* emu, void* server, void* add, void* rem, void* toggle, void* data, void* d)
+{
+    return my->dbus_server_set_timeout_functions(server, find_DBusAddTimeoutFunction_Fct(add), find_DBusRemoveTimeoutFunction_Fct(rem), find_DBusTimeoutToggledFunction_Fct(toggle), data, find_DBusFreeFunction_Fct(d));
+}
+
+EXPORT int my_dbus_server_set_data(x64emu_t* emu, void* server, int slot, void* data, void* d)
+{
+    return my->dbus_server_set_data(server, slot, data, find_DBusFreeFunction_Fct(d));
+}
 
 #define CUSTOM_INIT \
     getMy(lib);

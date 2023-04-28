@@ -75,6 +75,7 @@ uintptr_t dynarec64_0F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nin
 
         case 0x05:
             INST_NAME("SYSCALL");
+            NOTEST(x1);
             SMEND();
             GETIP(addr);
             STORE_XEMU_CALL(xRIP);
@@ -329,6 +330,7 @@ uintptr_t dynarec64_0F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nin
 
         case 0x31:
             INST_NAME("RDTSC");
+            NOTEST(x1);
             MESSAGE(LOG_DUMP, "Need Optimization\n");
             CALL(ReadTSC, xRAX);   // will return the u64 in xEAX
             LSRx(xRDX, xRAX, 32);
@@ -489,6 +491,7 @@ uintptr_t dynarec64_0F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nin
         case 0x52:
             INST_NAME("RSQRTPS Gx, Ex");
             nextop = F8;
+            SKIPTEST(x1);
             GETEX(q0, 0, 0);
             GETGX_empty(q1);
             v0 = fpu_get_scratch(dyn);
@@ -505,6 +508,7 @@ uintptr_t dynarec64_0F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nin
         case 0x53:
             INST_NAME("RCPPS Gx, Ex");
             nextop = F8;
+            SKIPTEST(x1);
             GETEX(q0, 0, 0);
             GETGX_empty(q1);
             if(q0 == q1)
@@ -591,6 +595,15 @@ uintptr_t dynarec64_0F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nin
             nextop = F8;
             GETGX(v0, 1);
             GETEX(v1, 0, 0);
+            // FMIN/FMAX wll not copy the value if v0[x] is NaN
+            // but x86 will copy if either v0[x] or v1[x] is NaN, so lets force a copy if source is NaN
+            if(!box64_dynarec_fastnan && v0!=v1) {
+                q0 = fpu_get_scratch(dyn);
+                VFCMEQQS(q0, v0, v0);   // 0 is NaN, 1 is not NaN, so MASK for NaN
+                VANDQ(v0, v0, q0);
+                VBICQ(q0, v1, q0);
+                VORRQ(v0, v0, q0);
+            }
             VFMINQS(v0, v0, v1);
             break;
         case 0x5E:
@@ -605,6 +618,15 @@ uintptr_t dynarec64_0F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nin
             nextop = F8;
             GETGX(v0, 1);
             GETEX(v1, 0, 0);
+            // FMIN/FMAX wll not copy the value if v0[x] is NaN
+            // but x86 will copy if either v0[x] or v1[x] is NaN, so lets force a copy if source is NaN
+            if(!box64_dynarec_fastnan && v0!=v1) {
+                q0 = fpu_get_scratch(dyn);
+                VFCMEQQS(q0, v0, v0);   // 0 is NaN, 1 is not NaN, so MASK for NaN
+                VANDQ(v0, v0, q0);
+                VBICQ(q0, v1, q0);
+                VORRQ(v0, v0, q0);
+            }
             VFMAXQS(v0, v0, v1);
             break;
         case 0x60:
@@ -1069,6 +1091,7 @@ uintptr_t dynarec64_0F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nin
             
         case 0xA2:
             INST_NAME("CPUID");
+            NOTEST(x1);
             MOVx_REG(x1, xRAX);
             CALL_(my_cpuid, -1, 0);
             break;
@@ -1242,7 +1265,7 @@ uintptr_t dynarec64_0F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nin
                     case 7:
                         INST_NAME("CLFLUSH Ed");
                         MESSAGE(LOG_DUMP, "Need Optimization?\n");
-                        addr = geted(dyn, addr, ninst, nextop, &ed, x1, &fixedaddress, &unscaled, 0, 0, rex, NULL, 0, 0);
+                        addr = geted(dyn, addr, ninst, nextop, &ed, x1, &fixedaddress, NULL, 0, 0, rex, NULL, 0, 0);
                         if(ed!=x1) {
                             MOVx_REG(x1, ed);
                         }

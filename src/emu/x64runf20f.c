@@ -22,18 +22,26 @@
 
 #include "modrm.h"
 
+#ifdef TEST_INTERPRETER
+uintptr_t TestF20F(x64test_t *test, rex_t rex, uintptr_t addr, int *step)
+#else
 uintptr_t RunF20F(x64emu_t *emu, rex_t rex, uintptr_t addr, int *step)
+#endif
 {
     uint8_t opcode;
     uint8_t nextop;
     int8_t tmp8s;
     uint8_t tmp8u;
     int32_t tmp32s;
+    int64_t tmp64s0, tmp64s1;
     reg64_t *oped, *opgd;
     sse_regs_t *opex, *opgx, eax1;
     mmx87_regs_t *opgm;
     #ifndef NOALIGN
     int is_nan;
+    #endif
+    #ifdef TEST_INTERPRETER
+    x64emu_t*emu = test->emu;
     #endif
 
     opcode = F8;
@@ -197,6 +205,8 @@ uintptr_t RunF20F(x64emu_t *emu, rex_t rex, uintptr_t addr, int *step)
         nextop = F8;
         GETEX(0);
         GETGX;
+        if (GX->d[0] == 0.0 && EX->d[0]  == 0.0)
+            GX->d[0] = EX->d[0];
         if (isnan(GX->d[0]) || isnan(EX->d[0]) || isless(EX->d[0], GX->d[0]))
             GX->d[0] = EX->d[0];
         break;
@@ -217,6 +227,8 @@ uintptr_t RunF20F(x64emu_t *emu, rex_t rex, uintptr_t addr, int *step)
         nextop = F8;
         GETEX(0);
         GETGX;
+        if (GX->d[0] == 0.0 && EX->d[0]  == 0.0)
+            GX->d[0] = EX->d[0];
         if (isnan(GX->d[0]) || isnan(EX->d[0]) || isgreater(EX->d[0], GX->d[0]))
             GX->d[0] = EX->d[0];
         break;
@@ -314,22 +326,33 @@ uintptr_t RunF20F(x64emu_t *emu, rex_t rex, uintptr_t addr, int *step)
         GETGX;
         switch(emu->mxcsr.f.MXCSR_RC) {
             case ROUND_Nearest:
-                GX->sd[0] = nearbyint(EX->d[0]);
-                GX->sd[1] = nearbyint(EX->d[1]);
+                tmp64s0 = nearbyint(EX->d[0]);
+                tmp64s1 = nearbyint(EX->d[1]);
                 break;
             case ROUND_Down:
-                GX->sd[0] = floor(EX->d[0]);
-                GX->sd[1] = floor(EX->d[1]);
+                tmp64s0 = floor(EX->d[0]);
+                tmp64s1 = floor(EX->d[1]);
                 break;
             case ROUND_Up:
-                GX->sd[0] = ceil(EX->d[0]);
-                GX->sd[1] = ceil(EX->d[1]);
+                tmp64s0 = ceil(EX->d[0]);
+                tmp64s1 = ceil(EX->d[1]);
                 break;
             case ROUND_Chop:
-                GX->sd[0] = EX->d[0];
-                GX->sd[1] = EX->d[1];
+                tmp64s0 = EX->d[0];
+                tmp64s1 = EX->d[1];
                 break;
         }
+        if (tmp64s0==(int32_t)tmp64s0 && !isnan(EX->d[0])) {
+            GX->sd[0] = (int32_t)tmp64s0;
+        } else {
+            GX->sd[0] = INT32_MIN;
+        }
+        if (tmp64s1==(int32_t)tmp64s1 && !isnan(EX->d[1])) {
+            GX->sd[1] = (int32_t)tmp64s1;
+        } else {
+            GX->sd[1] = INT32_MIN;
+        }
+
         GX->q[1] = 0;
         break;
 

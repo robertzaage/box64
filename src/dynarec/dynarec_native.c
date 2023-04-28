@@ -267,7 +267,7 @@ void addInst(instsize_t* insts, size_t* size, int x64_size, int native_size)
 }
 
 // add a value to table64 (if needed) and gives back the imm19 to use in LDR_literal
-int Table64(dynarec_native_t *dyn, uint64_t val)
+int Table64(dynarec_native_t *dyn, uint64_t val, int pass)
 {
     // find the value if already present
     int idx = -1;
@@ -278,10 +278,12 @@ int Table64(dynarec_native_t *dyn, uint64_t val)
     if(idx==-1) {
         if(dyn->table64size == dyn->table64cap) {
             dyn->table64cap+=16;
-            dyn->table64 = (uint64_t*)customRealloc(dyn->table64, dyn->table64cap * sizeof(uint64_t));
+            if(pass<3)  // do not resize on pass3, it's not the same type of memory anymore
+                dyn->table64 = (uint64_t*)customRealloc(dyn->table64, dyn->table64cap * sizeof(uint64_t));
         }
         idx = dyn->table64size++;
-        dyn->table64[idx] = val;
+        if(dyn->table64size <= dyn->table64cap)
+            dyn->table64[idx] = val;
     }
     // calculate offset
     int delta = dyn->tablestart + idx*sizeof(uint64_t) - (uintptr_t)dyn->block;
@@ -381,19 +383,17 @@ void CancelBlock64(int need_lock)
         mutex_lock(&my_context->mutex_dyndump);
     dynarec_native_t* helper = (dynarec_native_t*)current_helper;
     current_helper = NULL;
-    if(!helper) {
-        if(need_lock)
-            mutex_unlock(&my_context->mutex_dyndump);
-        return;
+    if(helper) {
+        customFree(helper->next);
+        customFree(helper->insts);
+        customFree(helper->predecessor);
+        if(helper->table64 && (helper->table64!=(uint64_t*)helper->tablestart))
+            customFree(helper->table64);
+        if(helper->dynablock && helper->dynablock->actual_block) {
+            FreeDynarecMap((uintptr_t)helper->dynablock->actual_block);
+            helper->dynablock->actual_block = NULL;
+        }
     }
-    customFree(helper->next);
-    customFree(helper->insts);
-    customFree(helper->predecessor);
-    customFree(helper->table64);
-    if(helper->dynablock && helper->dynablock->actual_block)
-        FreeDynarecMap((uintptr_t)helper->dynablock->actual_block);
-    else if(helper->dynablock && helper->block)
-        FreeDynarecMap((uintptr_t)helper->block-sizeof(void*));
     if(need_lock)
         mutex_unlock(&my_context->mutex_dyndump);
 }
@@ -421,7 +421,6 @@ void* CreateEmptyBlock(dynablock_t* block, uintptr_t addr) {
     *(dynablock_t**)actual_p = block;
     *(void**)(p+2*sizeof(void*)) = native_epilog;
     CreateJmpNext(block->jmpnext, p+2*sizeof(void*));
-    block->need_test = 0;
     // all done...
     __clear_cache(actual_p, actual_p+sz);   // need to clear the cache before execution...
     return block;
@@ -491,6 +490,8 @@ void* FillBlock64(dynablock_t* block, uintptr_t addr) {
         if(helper.insts[i].x64.jmp) {
             uintptr_t j = helper.insts[i].x64.jmp;
             if(j<start || j>=end || j==helper.insts[i].x64.addr) {
+                if(j==helper.insts[i].x64.addr) // if there is a loop on some opcode, make the block "always to tested"
+                    helper.always_test = 1;
                 helper.insts[i].x64.jmp_insts = -1;
                 helper.insts[i].x64.need_after |= X_PEND;
             } else {
@@ -520,12 +521,13 @@ void* FillBlock64(dynablock_t* block, uintptr_t addr) {
     // keep size of instructions for signal handling
     size_t insts_rsize = (helper.insts_size+2)*sizeof(instsize_t);
     insts_rsize = (insts_rsize+7)&~7;   // round the size...
+    size_t native_size = (helper.native_size+7)&~7;   // round the size...
     // ok, now allocate mapped memory, with executable flag on
-    size_t sz = sizeof(void*) + helper.native_size + helper.table64size*sizeof(uint64_t) + 4*sizeof(void*) + insts_rsize;
+    size_t sz = sizeof(void*) + native_size + helper.table64size*sizeof(uint64_t) + 4*sizeof(void*) + insts_rsize;
     //           dynablock_t*     block (arm insts)            table64                       jmpnext code       instsize
     void* actual_p = (void*)AllocDynarecMap(sz);
-    void* p = actual_p + sizeof(void*);
-    void* next = p + helper.native_size + helper.table64size*sizeof(uint64_t);
+    void* p = (void*)(((uintptr_t)actual_p) + sizeof(void*));
+    void* next = p + native_size + helper.table64size*sizeof(uint64_t);
     void* instsize = next + 4*sizeof(void*);
     if(actual_p==NULL) {
         dynarec_log(LOG_INFO, "AllocDynarecMap(%p, %zu) failed, cancelling block\n", block, sz);
@@ -533,11 +535,16 @@ void* FillBlock64(dynablock_t* block, uintptr_t addr) {
         return NULL;
     }
     helper.block = p;
+    block->actual_block = actual_p;
     helper.native_start = (uintptr_t)p;
-    helper.tablestart = helper.native_start + helper.native_size;
+    helper.tablestart = helper.native_start + native_size;
+    helper.jmp_next = (uintptr_t)next+sizeof(void*);
     helper.insts_size = 0;  // reset
     helper.instsize = (instsize_t*)instsize;
     *(dynablock_t**)actual_p = block;
+    helper.table64cap = helper.table64size;
+    customFree(helper.table64);
+    helper.table64 = (uint64_t*)helper.tablestart;
     // pass 3, emit (log emit native opcode)
     if(box64_dynarec_dump) {
         dynarec_log(LOG_NONE, "%s%04d|Emitting %zu bytes for %u x64 bytes", (box64_dynarec_dump>1)?"\e[01;36m":"", GetTID(), helper.native_size, helper.isize); 
@@ -549,6 +556,36 @@ void* FillBlock64(dynablock_t* block, uintptr_t addr) {
     helper.native_size = 0;
     helper.table64size = 0; // reset table64 (but not the cap)
     native_pass3(&helper, addr);
+    // keep size of instructions for signal handling
+    block->instsize = instsize;
+    // ok, free the helper now
+    customFree(helper.insts);
+    helper.insts = NULL;
+    helper.table64 = NULL;
+    helper.instsize = NULL;
+    customFree(helper.predecessor);
+    helper.predecessor = NULL;
+    block->size = sz;
+    block->isize = helper.size;
+    block->block = p;
+    block->jmpnext = next+sizeof(void*);
+    block->always_test = helper.always_test;
+    block->dirty = block->always_test;
+    *(dynablock_t**)next = block;
+    *(void**)(next+3*sizeof(void*)) = native_next;
+    CreateJmpNext(block->jmpnext, next+3*sizeof(void*));
+    //block->x64_addr = (void*)start;
+    block->x64_size = end-start;
+    // all done...
+    __clear_cache(actual_p, actual_p+sz);   // need to clear the cache before execution...
+    block->hash = X31_hash_code(block->x64_addr, block->x64_size);
+    // Check if something changed, to abbort if it as
+    if((block->hash != hash)) {
+        dynarec_log(LOG_DEBUG, "Warning, a block changed while being processed hash(%p:%ld)=%x/%x\n", block->x64_addr, block->x64_size, block->hash, hash);
+        AddHotPage(addr);
+        CancelBlock64(0);
+        return NULL;
+    }
     if((oldnativesize!=helper.native_size) || (oldtable64size<helper.table64size)) {
         printf_log(LOG_NONE, "BOX64: Warning, size difference in block between pass2 (%zu) & pass3 (%zu)!\n", sz, helper.native_size+helper.table64size*8);
         uint8_t *dump = (uint8_t*)helper.start;
@@ -561,47 +598,13 @@ void* FillBlock64(dynablock_t* block, uintptr_t addr) {
         }
         printf_log(LOG_NONE, "Table64 \t%d -> %d\n", oldtable64size*8, helper.table64size*8);
         printf_log(LOG_NONE, " ------------\n");
-        //TODO: Cancel block and return empty one
-    }
-    // add table64 if needed
-    if(helper.table64size) {
-        memcpy((void*)helper.tablestart, helper.table64, helper.table64size*8);
-    }
-    // keep size of instructions for signal handling
-    block->instsize = instsize;
-    // ok, free the helper now
-    customFree(helper.insts);
-    helper.insts = NULL;
-    customFree(helper.table64);
-    helper.table64 = NULL;
-    helper.instsize = NULL;
-    customFree(helper.predecessor);
-    helper.predecessor = NULL;
-    block->size = sz;
-    block->isize = helper.size;
-    block->actual_block = actual_p;
-    block->block = p;
-    block->jmpnext = next+sizeof(void*);
-    *(dynablock_t**)next = block;
-    *(void**)(next+2*sizeof(void*)) = native_next;
-    CreateJmpNext(block->jmpnext, next+2*sizeof(void*));
-    block->need_test = 0;
-    //block->x64_addr = (void*)start;
-    block->x64_size = end-start;
-    // all done...
-    __clear_cache(actual_p, actual_p+sz);   // need to clear the cache before execution...
-    block->hash = X31_hash_code(block->x64_addr, block->x64_size);
-    // Check if something changed, to abbort if it as
-    if((block->hash != hash)) {
-        dynarec_log(LOG_DEBUG, "Warning, a block changed while beeing processed hash(%p:%ld)=%x/%x\n", block->x64_addr, block->x64_size, block->hash, hash);
-        AddHotPage(addr);
         CancelBlock64(0);
         return NULL;
     }
     if(!isprotectedDB(addr, end-addr)) {
-        dynarec_log(LOG_DEBUG, "Warning, block unprotected while beeing processed %p:%ld, cancelling\n", block->x64_addr, block->x64_size);
+        dynarec_log(LOG_DEBUG, "Warning, block unprotected while being processed %p:%ld, marking as need_test\n", block->x64_addr, block->x64_size);
         AddHotPage(addr);
-        block->need_test = 1;
+        block->dirty = 1;
         //protectDB(addr, end-addr);
     }
     current_helper = NULL;

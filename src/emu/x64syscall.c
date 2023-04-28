@@ -124,6 +124,8 @@ scwrap_t syscallwrap[] = {
     { 45, __NR_recvfrom, 6},
     { 46, __NR_sendmsg, 3},
     { 47, __NR_recvmsg, 3},
+    { 49, __NR_bind, 3},
+    { 50, __NR_listen, 2},
     { 51, __NR_getsockname, 3},
     { 52, __NR_getpeername, 3},
     { 53, __NR_socketpair, 4},
@@ -146,6 +148,7 @@ scwrap_t syscallwrap[] = {
     { 78, __NR_getdents, 3},
     #endif
     { 79, __NR_getcwd, 2},
+    { 80, __NR_chdir, 1},
     #ifdef __NR_rename
     { 82, __NR_rename, 2},
     #endif
@@ -159,7 +162,18 @@ scwrap_t syscallwrap[] = {
     { 96, __NR_gettimeofday, 2},
     { 97, __NR_getrlimit, 2},
     { 101, __NR_ptrace, 4},
+    { 102, __NR_getuid, 0},
+    { 104, __NR_getgid, 0},
+    { 105, __NR_setuid, 1},
+    { 106, __NR_setgid, 1},
+    { 107, __NR_geteuid, 0},
+    { 108, __NR_getegid, 0},
+    { 109, __NR_setpgid, 2},
+    { 110, __NR_getppid, 0},
+    //{ 111, __NR_getpgrp, 0},
     { 112, __NR_setsid, 0},
+    { 113, __NR_setreuid, 2},
+    { 114, __NR_setregid, 2},
     { 118, __NR_getresuid, 3},
     { 120, __NR_getresgid, 3},
     { 125, __NR_capget, 2},
@@ -227,6 +241,8 @@ scwrap_t syscallwrap[] = {
     #ifdef _NR_eventfd
     { 284, __NR_eventfd, 1},
     #endif
+    { 285, __NR_fallocate, 4},
+    { 288, __NR_accept4, 4},
     { 290, __NR_eventfd2, 2},
     { 291, __NR_epoll_create1, 1},
     { 292, __NR_dup3, 3},

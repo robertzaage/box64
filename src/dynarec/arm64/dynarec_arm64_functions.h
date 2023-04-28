@@ -32,7 +32,7 @@ void neoncache_promote_double(dynarec_arm_t* dyn, int ninst, int a);
 // Combine and propagate if needed (pass 1 only)
 int neoncache_combine_st(dynarec_arm_t* dyn, int ninst, int a, int b);  // with stack current dyn->n_stack*
 
-// FPU Cache transformation (for loops) // Specific, need to be writen par backend
+// FPU Cache transformation (for loops) // Specific, need to be written par backend
 int fpuCacheNeedsTransform(dynarec_arm_t* dyn, int ninst);
 
 // Undo the changes of a neoncache to get the status before the instruction
@@ -43,4 +43,6 @@ int getedparity(dynarec_native_t* dyn, int ninst, uintptr_t addr, uint8_t nextop
 
 const char* getCacheName(int t, int n);
 
+void inst_name_pass3(dynarec_native_t* dyn, int ninst, const char* name);
+void print_opcode(dynarec_native_t* dyn, int ninst, uint32_t opcode);
 #endif //__DYNAREC_ARM_FUNCTIONS_H__

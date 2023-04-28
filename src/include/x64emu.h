@@ -10,6 +10,7 @@ void SetupX64Emu(x64emu_t *emu);
 void FreeX64Emu(x64emu_t **x64emu);
 void FreeX64EmuFromStack(x64emu_t **emu);
 void CloneEmu(x64emu_t *newemu, const x64emu_t* emu);
+void CopyEmu(x64emu_t *newemu, const x64emu_t* emu);
 void SetTraceEmu(uintptr_t trace_start, uintptr_t trace_end);
 
 box64context_t* GetEmuContext(x64emu_t* emu);
@@ -46,8 +47,8 @@ void StopEmu(x64emu_t* emu, const char* reason);
 void PushExit(x64emu_t* emu);
 void* GetExit();
 void EmuCall(x64emu_t* emu, uintptr_t addr);
-void AddCleanup(x64emu_t *emu, void *p);
-void AddCleanup1Arg(x64emu_t *emu, void *p, void* a);
+void AddCleanup(x64emu_t *emu, void *p, void* dso_handle);
+void AddCleanup1Arg(x64emu_t *emu, void *p, void* a, void* dso_handle);
 void CallCleanup(x64emu_t *emu, void* p);
 void CallAllCleanup(x64emu_t *emu);
 void UnimpOpcode(x64emu_t* emu);

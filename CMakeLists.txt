@@ -75,19 +75,21 @@ option(PAGE8K "Set to ON if host device have PageSize of 8K (instead of 4K)" ${P
 option(PAGE16K "Set to ON if host device have PageSize of 16K (instead of 4K)" ${PAGE16K})
 option(PAGE64K "Set to ON if host device have PageSize of 64K (instead of 4K)" ${PAGE64K})
 option(STATICBUILD "Set to ON to have a static build (Warning, not working)" ${STATICBUILD})
+option(NO_LIB_INSTALL "Set ON to not install a few x86_64 libs that are used by many program" ${NO_LIB_INSTALL})
+option(NO_CONF_INSTALL "Set ON to not install config files" ${NO_CONF_INSTALL})
 
 if(${CMAKE_VERSION} VERSION_LESS "3.12.2")
     find_package(PythonInterp 3)
     if(NOT PYTHONINTERP_FOUND)
-        message( FATAL_ERROR "You need a Python interpretor, CMake will exit." )
+        message( FATAL_ERROR "You need a Python interpreter, CMake will exit." )
     endif()
     if(${PYTHON_VERSION_MAJOR} LESS 3)
-        message( FATAL_ERROR "You need a Python 3 interpretor, CMake will exit." )
+        message( FATAL_ERROR "You need a Python 3 interpreter, CMake will exit." )
     endif()
 else()
     find_package(Python3)
     if(NOT Python3_Interpreter_FOUND)
-        message( FATAL_ERROR "You need a Python interpretor, CMake will exit." )
+        message( FATAL_ERROR "You need a Python interpreter, CMake will exit." )
     endif()
     set(PYTHON_EXECUTABLE ${Python3_EXECUTABLE} CACHE INTERNAL "The Python3 executable" FORCE)
 endif()
@@ -265,30 +267,6 @@ set(ELFLOADER_SRC
     "${BOX64_ROOT}/src/emu/x64int3.c"
     "${BOX64_ROOT}/src/emu/x87emu_private.c"
     "${BOX64_ROOT}/src/emu/x64primop.c"
-    "${BOX64_ROOT}/src/emu/x64run.c"
-    "${BOX64_ROOT}/src/emu/x64run0f.c"
-    "${BOX64_ROOT}/src/emu/x64run64.c"
-    "${BOX64_ROOT}/src/emu/x64run66.c"
-    "${BOX64_ROOT}/src/emu/x64run660f.c"
-    "${BOX64_ROOT}/src/emu/x64run6664.c"
-    "${BOX64_ROOT}/src/emu/x64run66d9.c"
-    "${BOX64_ROOT}/src/emu/x64run66dd.c"
-    "${BOX64_ROOT}/src/emu/x64run66f0.c"
-    "${BOX64_ROOT}/src/emu/x64run67.c"
-    "${BOX64_ROOT}/src/emu/x64run670f.c"
-    "${BOX64_ROOT}/src/emu/x64run6766.c"
-    "${BOX64_ROOT}/src/emu/x64run67660f.c"
-    "${BOX64_ROOT}/src/emu/x64rund8.c"
-    "${BOX64_ROOT}/src/emu/x64rund9.c"
-    "${BOX64_ROOT}/src/emu/x64runda.c"
-    "${BOX64_ROOT}/src/emu/x64rundb.c"
-    "${BOX64_ROOT}/src/emu/x64rundc.c"
-    "${BOX64_ROOT}/src/emu/x64rundd.c"
-    "${BOX64_ROOT}/src/emu/x64runde.c"
-    "${BOX64_ROOT}/src/emu/x64rundf.c"
-    "${BOX64_ROOT}/src/emu/x64runf0.c"
-    "${BOX64_ROOT}/src/emu/x64runf20f.c"
-    "${BOX64_ROOT}/src/emu/x64runf30f.c"
     "${BOX64_ROOT}/src/emu/x64run_private.c"
     "${BOX64_ROOT}/src/emu/x64syscall.c"
     "${BOX64_ROOT}/src/emu/x64tls.c"
@@ -318,6 +296,33 @@ set(ELFLOADER_SRC
     "${BOX64_ROOT}/src/wrapped/generated/wrapper.c"
 )
 
+set(INTERPRETER
+    "${BOX64_ROOT}/src/emu/x64run.c"
+    "${BOX64_ROOT}/src/emu/x64run0f.c"
+    "${BOX64_ROOT}/src/emu/x64run64.c"
+    "${BOX64_ROOT}/src/emu/x64run66.c"
+    "${BOX64_ROOT}/src/emu/x64run660f.c"
+    "${BOX64_ROOT}/src/emu/x64run6664.c"
+    "${BOX64_ROOT}/src/emu/x64run66d9.c"
+    "${BOX64_ROOT}/src/emu/x64run66dd.c"
+    "${BOX64_ROOT}/src/emu/x64run66f0.c"
+    "${BOX64_ROOT}/src/emu/x64run67.c"
+    "${BOX64_ROOT}/src/emu/x64run670f.c"
+    "${BOX64_ROOT}/src/emu/x64run6766.c"
+    "${BOX64_ROOT}/src/emu/x64run67660f.c"
+    "${BOX64_ROOT}/src/emu/x64rund8.c"
+    "${BOX64_ROOT}/src/emu/x64rund9.c"
+    "${BOX64_ROOT}/src/emu/x64runda.c"
+    "${BOX64_ROOT}/src/emu/x64rundb.c"
+    "${BOX64_ROOT}/src/emu/x64rundc.c"
+    "${BOX64_ROOT}/src/emu/x64rundd.c"
+    "${BOX64_ROOT}/src/emu/x64runde.c"
+    "${BOX64_ROOT}/src/emu/x64rundf.c"
+    "${BOX64_ROOT}/src/emu/x64runf0.c"
+    "${BOX64_ROOT}/src/emu/x64runf20f.c"
+    "${BOX64_ROOT}/src/emu/x64runf30f.c"
+)
+
 set(WRAPPEDS
     "${BOX64_ROOT}/src/wrapped/wrappedalure.c"
     "${BOX64_ROOT}/src/wrapped/wrappedalut.c"
@@ -330,6 +335,7 @@ set(WRAPPEDS
     "${BOX64_ROOT}/src/wrapped/wrappedcairogobject.c"
     "${BOX64_ROOT}/src/wrapped/wrappedcrashhandler.c"
     "${BOX64_ROOT}/src/wrapped/wrappedcrypto.c"
+    "${BOX64_ROOT}/src/wrapped/wrappedcrypto3.c"
     "${BOX64_ROOT}/src/wrapped/wrappedcurl.c"
     "${BOX64_ROOT}/src/wrapped/wrappeddbus.c"
     "${BOX64_ROOT}/src/wrapped/wrappeddbusglib1.c"
@@ -367,6 +373,7 @@ set(WRAPPEDS
     "${BOX64_ROOT}/src/wrapped/wrappedldlinux.c"
     "${BOX64_ROOT}/src/wrapped/wrappedlibasound.c"
     "${BOX64_ROOT}/src/wrapped/wrappedlibc.c"
+    "${BOX64_ROOT}/src/wrapped/wrappedlibcmusl.c"
     "${BOX64_ROOT}/src/wrapped/wrappedlibcrypt.c"
     "${BOX64_ROOT}/src/wrapped/wrappedlibcups.c"
     "${BOX64_ROOT}/src/wrapped/wrappedlibdl.c"
@@ -385,6 +392,7 @@ set(WRAPPEDS
     "${BOX64_ROOT}/src/wrapped/wrappedlibncurses6.c"
     "${BOX64_ROOT}/src/wrapped/wrappedlibncursesw.c"
     "${BOX64_ROOT}/src/wrapped/wrappedlibncursesw6.c"
+    "${BOX64_ROOT}/src/wrapped/wrappedlibnuma.c"
     "${BOX64_ROOT}/src/wrapped/wrappedlibogg.c"
     "${BOX64_ROOT}/src/wrapped/wrappedlibpanel.c"
     "${BOX64_ROOT}/src/wrapped/wrappedlibpci.c"
@@ -395,6 +403,7 @@ set(WRAPPEDS
     "${BOX64_ROOT}/src/wrapped/wrappedlibsm.c"
     "${BOX64_ROOT}/src/wrapped/wrappedlibsndfile.c"
     "${BOX64_ROOT}/src/wrapped/wrappedlibssl.c"
+    "${BOX64_ROOT}/src/wrapped/wrappedlibssl3.c"
     "${BOX64_ROOT}/src/wrapped/wrappedlibtinfo.c"
     "${BOX64_ROOT}/src/wrapped/wrappedlibtinfo6.c"
     "${BOX64_ROOT}/src/wrapped/wrappedlibusb1.c"
@@ -479,6 +488,7 @@ set(WRAPPEDS
     "${BOX64_ROOT}/src/wrapped/wrappedsmime3.c"
     "${BOX64_ROOT}/src/wrapped/wrappedsmpeg2.c"
     "${BOX64_ROOT}/src/wrapped/wrappedssl3.c"
+    "${BOX64_ROOT}/src/wrapped/wrappedtbbbind.c"
     "${BOX64_ROOT}/src/wrapped/wrappedtbbmalloc.c"
     "${BOX64_ROOT}/src/wrapped/wrappedtbbmallocproxy.c"
     "${BOX64_ROOT}/src/wrapped/wrappedtcmallocminimal.c"
@@ -500,6 +510,10 @@ set(WRAPPEDS
     "${BOX64_ROOT}/src/wrapped/wrappedvulkan.c"
     "${BOX64_ROOT}/src/wrapped/wrappedxshmfence.c"
     "${BOX64_ROOT}/src/wrapped/wrappedd3dadapter9.c"
+    "${BOX64_ROOT}/src/wrapped/wrappedicuuc67.c"
+    "${BOX64_ROOT}/src/wrapped/wrappedicui18n67.c"
+    "${BOX64_ROOT}/src/wrapped/wrappedicuuc72.c"
+    "${BOX64_ROOT}/src/wrapped/wrappedicui18n72.c"
 )
 
 # If BOX64_ROOT contains a ".c", the build breaks...
@@ -542,6 +556,7 @@ if(DYNAREC)
         "${BOX64_ROOT}/src/dynarec/dynablock.c"
         "${BOX64_ROOT}/src/dynarec/dynarec_native.c"
         "${BOX64_ROOT}/src/dynarec/dynarec_native_functions.c"
+        "${BOX64_ROOT}/src/emu/x64test.c"
     )
 endif()
 
@@ -609,24 +624,28 @@ if(RV64_DYNAREC)
     "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_emit_logic.c"
     "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_emit_shift.c"
     "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_00.c"
+    "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_00_0.c"
+    "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_00_1.c"
+    "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_00_2.c"
+    "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_00_3.c"
     "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_0f.c"
     "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_64.c"
     #"${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_65.c"
     "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_66.c"
     #"${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_67.c"
-    #"${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_d8.c"
+    "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_d8.c"
     "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_d9.c"
     #"${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_da.c"
-    #"${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_db.c"
+    "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_db.c"
     #"${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_dc.c"
-    #"${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_dd.c"
-    #"${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_de.c"
-    #"${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_df.c"
+    "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_dd.c"
+    "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_de.c"
+    "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_df.c"
     "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_f0.c"
     "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_660f.c"
     #"${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_6664.c"
     #"${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_66f0.c"
-    #"${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_f20f.c"
+    "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_f20f.c"
     "${BOX64_ROOT}/src/dynarec/rv64/dynarec_rv64_f30f.c"
     )
 endif()
@@ -648,6 +667,8 @@ if(DYNAREC)
     set_target_properties(native_pass2 PROPERTIES COMPILE_FLAGS "-DSTEP=2")
     add_library(native_pass3 OBJECT ${DYNAREC_PASS})
     set_target_properties(native_pass3 PROPERTIES COMPILE_FLAGS "-DSTEP=3")
+    add_library(test_interpreter OBJECT ${INTERPRETER})
+    set_target_properties(test_interpreter PROPERTIES COMPILE_FLAGS "-DTEST_INTERPRETER")
     add_dependencies(native_pass0 WRAPPERS)
     add_dependencies(native_pass1 WRAPPERS)
     add_dependencies(native_pass2 WRAPPERS)
@@ -659,6 +680,7 @@ if(DYNAREC)
         $<TARGET_OBJECTS:native_pass1>
         $<TARGET_OBJECTS:native_pass2>
         $<TARGET_OBJECTS:native_pass3>
+        $<TARGET_OBJECTS:test_interpreter>
     )
 endif()
 
@@ -667,15 +689,17 @@ if(DYNAREC)
     add_custom_command(
         OUTPUT "${BOX64_ROOT}/src/git_head.h"
         COMMAND sh -c "echo \\\#define GITREV \\\"$(git rev-parse --short HEAD)\\\">\"${BOX64_ROOT}/src/git_head.h\""
-        DEPENDS dynarec ${ELFLOADER_SRC} ${WRAPPEDS}
+        DEPENDS dynarec ${ELFLOADER_SRC} ${INTERPRETER} ${WRAPPEDS}
         VERBATIM)
 else()
     add_custom_command(
         OUTPUT "${BOX64_ROOT}/src/git_head.h"
         COMMAND sh -c "echo \\\#define GITREV \\\"$(git rev-parse --short HEAD)\\\">\"${BOX64_ROOT}/src/git_head.h\""
-        DEPENDS ${ELFLOADER_SRC} ${WRAPPEDS}
+        DEPENDS ${ELFLOADER_SRC} ${INTERPRETER} ${WRAPPEDS}
         VERBATIM)
 endif()
+
+add_library(interpreter OBJECT ${INTERPRETER})
 
 add_executable(${BOX64} ${ELFLOADER_SRC} ${WRAPPEDS} "${BOX64_ROOT}/src/git_head.h")
 set_target_properties(${BOX64} PROPERTIES ENABLE_EXPORTS ON)
@@ -690,6 +714,7 @@ endif()
 if(DYNAREC)
     target_link_libraries(${BOX64} dynarec)
 endif()
+target_link_libraries(${BOX64} interpreter)
 
 if(${CMAKE_VERSION} VERSION_LESS "3.13")
     if(NOT NOLOADADDR)
@@ -713,6 +738,7 @@ endif()
 string(COMPARE EQUAL "${CMAKE_HOST_SYSTEM_PROCESSOR}" "i686"  _x86)
 string(COMPARE EQUAL "${CMAKE_HOST_SYSTEM_PROCESSOR}" "x86_64"  _x86_64)
 string(COMPARE EQUAL "${CMAKE_HOST_SYSTEM_PROCESSOR}" "aarch64"  _aarch64)
+string(COMPARE EQUAL "${CMAKE_HOST_SYSTEM_PROCESSOR}" "riscv64"  _riscv64)
 
 if(_x86_64 OR _aarch64)
   add_definitions(-DCONFIG_64BIT)
@@ -721,13 +747,17 @@ endif()
 if(NOT _x86 AND NOT _x86_64)
   install(TARGETS ${BOX64}
     RUNTIME DESTINATION bin)
-  configure_file(system/box64.conf.cmake system/box64.conf)
-  install(FILES ${CMAKE_BINARY_DIR}/system/box64.conf DESTINATION /etc/binfmt.d/)
-  install(FILES ${CMAKE_SOURCE_DIR}/x64lib/libstdc++.so.5 DESTINATION /usr/lib/x86_64-linux-gnu/)
-  install(FILES ${CMAKE_SOURCE_DIR}/x64lib/libstdc++.so.6 DESTINATION /usr/lib/x86_64-linux-gnu/)
-  install(FILES ${CMAKE_SOURCE_DIR}/x64lib/libgcc_s.so.1 DESTINATION /usr/lib/x86_64-linux-gnu/)
-  install(FILES ${CMAKE_SOURCE_DIR}/x64lib/libpng12.so.0 DESTINATION /usr/lib/x86_64-linux-gnu/)
-  install(FILES ${CMAKE_SOURCE_DIR}/system/box64.box64rc DESTINATION /etc/)
+  if(NOT NO_CONF_INSTALL)
+    configure_file(system/box64.conf.cmake system/box64.conf)
+    install(FILES ${CMAKE_BINARY_DIR}/system/box64.conf DESTINATION /etc/binfmt.d/)
+    install(FILES ${CMAKE_SOURCE_DIR}/system/box64.box64rc DESTINATION /etc/)
+  endif()
+  if(NOT NO_LIB_INSTALL)
+    install(FILES ${CMAKE_SOURCE_DIR}/x64lib/libstdc++.so.5 DESTINATION /usr/lib/x86_64-linux-gnu/)
+    install(FILES ${CMAKE_SOURCE_DIR}/x64lib/libstdc++.so.6 DESTINATION /usr/lib/x86_64-linux-gnu/)
+    install(FILES ${CMAKE_SOURCE_DIR}/x64lib/libgcc_s.so.1 DESTINATION /usr/lib/x86_64-linux-gnu/)
+    install(FILES ${CMAKE_SOURCE_DIR}/x64lib/libpng12.so.0 DESTINATION /usr/lib/x86_64-linux-gnu/)
+   endif()
 endif()
 
 if(NOT TARGET uninstall)
@@ -761,6 +791,8 @@ set(CPACK_PACKAGE_VERSION_PATCH ${BOX64_REVISION})
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/postinst")
 if(_aarch64)
     set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "arm64")
+elseif(__riscv64)
+    set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "riscv64")
 elseif(_x86_64)
     set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "x86_64")
 else()
@@ -883,6 +915,8 @@ add_test(irelative_reloc ${CMAKE_COMMAND} -D TEST_PROGRAM=${CMAKE_BINARY_DIR}/${
     -D TEST_ARGS=${CMAKE_SOURCE_DIR}/tests/test22 -D TEST_OUTPUT=tmpfile22.txt
     -D TEST_REFERENCE=${CMAKE_SOURCE_DIR}/tests/ref22.txt
     -P ${CMAKE_SOURCE_DIR}/runTest.cmake )
+
+    set_tests_properties(x87 PROPERTIES ENVIRONMENT "BOX64_DYNAREC_FASTROUND=0")
 
     file(GLOB extension_tests "${CMAKE_SOURCE_DIR}/tests/extensions/*.c")
 foreach(file ${extension_tests})

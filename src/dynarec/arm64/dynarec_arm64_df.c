@@ -60,7 +60,8 @@ uintptr_t dynarec64_DF(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nin
             LDRw_U12(x2, xEmu, offsetof(x64emu_t, top));
             LDRH_U12(x1, xEmu, offsetof(x64emu_t, sw));
             BFIw(x1, x2, 11, 3); // inject top
-            BFIw(xRAX, x1, 0, 16);
+            STRH_U12(x1, xEmu, offsetof(x64emu_t, sw));
+            BFIx(xRAX, x1, 0, 16);
             break;
         case 0xE8:
         case 0xE9:
@@ -177,6 +178,7 @@ uintptr_t dynarec64_DF(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nin
                     #else
                     MRS_fpsr(x5);
                     BFCw(x5, FPSR_IOC, 1);   // reset IOC bit
+                    BFCw(x5, FPSR_QC, 1);   // reset QC bit
                     MSR_fpsr(x5);
                     if(ST_IS_F(0)) {
                         VFCVTZSs(s0, v1);
@@ -184,13 +186,16 @@ uintptr_t dynarec64_DF(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nin
                         VFCVTZSd(s0, v1);
                         SQXTN_S_D(s0, s0);
                     }
-                    SQXTN_H_S(s0, s0);
-                    VST16(s0, wback, fixedaddress);
+                    VMOVSto(x3, s0, 0);
                     MRS_fpsr(x5);   // get back FPSR to check the IOC bit
-                    TBZ_MARK3(x5, FPSR_IOC);
-                    MOV32w(x5, 0x8000);
-                    STH(x5, wback, fixedaddress);
+                    TBNZ_MARK2(x5, FPSR_IOC);
+                    SXTHw(x5, x3);  // check if 16bits value is fine
+                    SUBw_REG(x5, x5, x3);
+                    CBZw_MARK3(x5);
+                    MARK2;
+                    MOV32w(x3, 0x8000);
                     MARK3;
+                    STH(x3, wback, fixedaddress);
                     #endif
                     x87_do_pop(dyn, ninst, x3);
                     break;
@@ -211,6 +216,7 @@ uintptr_t dynarec64_DF(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nin
                     #else
                     MRS_fpsr(x5);
                     BFCw(x5, FPSR_IOC, 1);   // reset IOC bit
+                    BFCw(x5, FPSR_QC, 1);   // reset QC bit
                     MSR_fpsr(x5);
                     if(ST_IS_F(0)) {
                         FRINTXS(s0, v1);
@@ -220,13 +226,16 @@ uintptr_t dynarec64_DF(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nin
                         VFCVTZSd(s0, s0);
                         SQXTN_S_D(s0, s0);
                     }
-                    SQXTN_H_S(s0, s0);
-                    VST16(s0, wback, fixedaddress);
+                    VMOVSto(x3, s0, 0);
                     MRS_fpsr(x5);   // get back FPSR to check the IOC bit
-                    TBZ_MARK3(x5, FPSR_IOC);
-                    MOV32w(x5, 0x8000);
-                    STH(x5, wback, fixedaddress);
+                    TBNZ_MARK2(x5, FPSR_IOC);
+                    SXTHw(x5, x3);  // check if 16bits value is fine
+                    SUBw_REG(x5, x5, x3);
+                    CBZw_MARK3(x5);
+                    MARK2;
+                    MOV32w(x3, 0x8000);
                     MARK3;
+                    STH(x3, wback, fixedaddress);
                     #endif
                     x87_restoreround(dyn, ninst, u8);
                     break;
@@ -256,13 +265,16 @@ uintptr_t dynarec64_DF(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nin
                         VFCVTZSd(s0, s0);
                         SQXTN_S_D(s0, s0);
                     }
-                    SQXTN_H_S(s0, s0);
-                    VST16(s0, wback, fixedaddress);
+                    VMOVSto(x3, s0, 0);
                     MRS_fpsr(x5);   // get back FPSR to check the IOC bit
-                    TBZ_MARK3(x5, FPSR_IOC);
-                    MOV32w(x5, 0x8000);
-                    STH(x5, wback, fixedaddress);
+                    TBNZ_MARK2(x5, FPSR_IOC);
+                    SXTHw(x5, x3);  // check if 16bits value is fine
+                    SUBw_REG(x5, x5, x3);
+                    CBZw_MARK3(x5);
+                    MARK2;
+                    MOV32w(x3, 0x8000);
                     MARK3;
+                    STH(x3, wback, fixedaddress);
                     #endif
                     x87_do_pop(dyn, ninst, x3);
                     x87_restoreround(dyn, ninst, u8);

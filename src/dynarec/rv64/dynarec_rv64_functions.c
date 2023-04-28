@@ -33,8 +33,6 @@
 #define X870    XMM0+16
 #define EMM0    XMM0+16
 
-#define SCRATCH0    0
-
 // Get a FPU scratch reg
 int fpu_get_scratch(dynarec_rv64_t* dyn)
 {
@@ -56,13 +54,13 @@ int fpu_get_reg_x87(dynarec_rv64_t* dyn, int t, int n)
     dyn->e.news |= (1<<i);
     return EXTREG(i); // return a Dx
 }
-// Free a FPU double reg
+// Free a FPU reg
 void fpu_free_reg(dynarec_rv64_t* dyn, int reg)
 {
     int idx = EXTIDX(reg);
     // TODO: check upper limit?
     dyn->e.fpuused[idx] = 0;
-    if(dyn->e.extcache[idx].t!=EXT_CACHE_ST_F && dyn->e.extcache[idx].t!=EXT_CACHE_ST_D)
+    if(dyn->e.extcache[reg].t!=EXT_CACHE_ST_F && dyn->e.extcache[reg].t!=EXT_CACHE_ST_D)
         dyn->e.extcache[idx].v = 0;
 }
 // Get an MMX double reg
@@ -74,7 +72,7 @@ int fpu_get_reg_emm(dynarec_rv64_t* dyn, int emm)
     dyn->e.news |= (1<<(EMM0 + emm));
     return EXTREG(EMM0 + emm);
 }
-// Get an XMM quad reg
+// Get an XMM reg
 int fpu_get_reg_xmm(dynarec_rv64_t* dyn, int t, int xmm)
 {
     int i = XMM0+xmm;
@@ -318,13 +316,7 @@ int fpuCacheNeedsTransform(dynarec_rv64_t* dyn, int ninst) {
             if(!cache_i2.extcache[i].v) {    // but there is nothing at i2 for i
                 ret = 1;
             } else if(dyn->insts[ninst].e.extcache[i].v!=cache_i2.extcache[i].v) {  // there is something different
-                if(dyn->insts[ninst].e.extcache[i].n!=cache_i2.extcache[i].n) {   // not the same x64 reg
-                    ret = 1;
-                }
-                else if(dyn->insts[ninst].e.extcache[i].t == EXT_CACHE_SS && cache_i2.extcache[i].t == EXT_CACHE_SD)
-                    {/* nothing */ }
-                else
-                    ret = 1;
+                ret = 1;
             }
         } else if(cache_i2.extcache[i].v)
             ret = 1;
@@ -396,24 +388,24 @@ void extcacheUnwind(extcache_t* cache)
             cache->fpuused[i] = 1;
             switch (cache->extcache[i].t) {
                 case EXT_CACHE_MM:
-                    cache->mmxcache[cache->extcache[i].n] = i;
+                    cache->mmxcache[cache->extcache[i].n] = EXTREG(i);
                     ++cache->mmxcount;
                     ++cache->fpu_reg;
                     break;
                 case EXT_CACHE_SS:
-                    cache->ssecache[cache->extcache[i].n].reg = i;
+                    cache->ssecache[cache->extcache[i].n].reg = EXTREG(i);
                     cache->ssecache[cache->extcache[i].n].single = 1;
                     ++cache->fpu_reg;
                     break;
                 case EXT_CACHE_SD:
-                    cache->ssecache[cache->extcache[i].n].reg = i;
+                    cache->ssecache[cache->extcache[i].n].reg = EXTREG(i);
                     cache->ssecache[cache->extcache[i].n].single = 0;
                     ++cache->fpu_reg;
                     break;
                 case EXT_CACHE_ST_F:
                 case EXT_CACHE_ST_D:
                     cache->x87cache[x87reg] = cache->extcache[i].n;
-                    cache->x87reg[x87reg] = i;
+                    cache->x87reg[x87reg] = EXTREG(i);
                     ++x87reg;
                     ++cache->fpu_reg;
                     break;
@@ -490,4 +482,69 @@ const char* getCacheName(int t, int n)
         case EXT_CACHE_NONE: buff[0]='\0'; break;
     }
     return buff;
+}
+
+void inst_name_pass3(dynarec_native_t* dyn, int ninst, const char* name)
+{
+    if(box64_dynarec_dump) {
+        printf_x64_instruction(my_context->dec, &dyn->insts[ninst].x64, name);
+        dynarec_log(LOG_NONE, "%s%p: %d emitted opcodes, inst=%d, barrier=%d state=%d/%d(%d), %s=%X/%X, use=%X, need=%X/%X, sm=%d/%d",
+            (box64_dynarec_dump>1)?"\e[32m":"",
+            (void*)(dyn->native_start+dyn->insts[ninst].address),
+            dyn->insts[ninst].size/4,
+            ninst,         
+            dyn->insts[ninst].x64.barrier,
+            dyn->insts[ninst].x64.state_flags,
+            dyn->f.pending,
+            dyn->f.dfnone,
+            dyn->insts[ninst].x64.may_set?"may":"set",
+            dyn->insts[ninst].x64.set_flags,
+            dyn->insts[ninst].x64.gen_flags,
+            dyn->insts[ninst].x64.use_flags,
+            dyn->insts[ninst].x64.need_before,
+            dyn->insts[ninst].x64.need_after,
+            dyn->smread, dyn->smwrite);
+        if(dyn->insts[ninst].pred_sz) {
+            dynarec_log(LOG_NONE, ", pred=");
+            for(int ii=0; ii<dyn->insts[ninst].pred_sz; ++ii)
+                dynarec_log(LOG_NONE, "%s%d", ii?"/":"", dyn->insts[ninst].pred[ii]);
+        }
+        if(dyn->insts[ninst].x64.jmp && dyn->insts[ninst].x64.jmp_insts>=0)
+            dynarec_log(LOG_NONE, ", jmp=%d", dyn->insts[ninst].x64.jmp_insts);
+        if(dyn->insts[ninst].x64.jmp && dyn->insts[ninst].x64.jmp_insts==-1)
+            dynarec_log(LOG_NONE, ", jmp=out");
+        if(dyn->last_ip)
+            dynarec_log(LOG_NONE, ", last_ip=%p", (void*)dyn->last_ip);
+        for(int ii=0; ii<24; ++ii) {
+            switch(dyn->insts[ninst].e.extcache[ii].t) {
+                case EXT_CACHE_ST_D: dynarec_log(LOG_NONE, " D%d:%s", EXTREG(ii), getCacheName(dyn->insts[ninst].e.extcache[ii].t, dyn->insts[ninst].e.extcache[ii].n)); break;
+                case EXT_CACHE_ST_F: dynarec_log(LOG_NONE, " S%d:%s", EXTREG(ii), getCacheName(dyn->insts[ninst].e.extcache[ii].t, dyn->insts[ninst].e.extcache[ii].n)); break;
+                case EXT_CACHE_MM: dynarec_log(LOG_NONE, " D%d:%s", EXTREG(ii), getCacheName(dyn->insts[ninst].e.extcache[ii].t, dyn->insts[ninst].e.extcache[ii].n)); break;
+                case EXT_CACHE_SS: dynarec_log(LOG_NONE, " S%d:%s", EXTREG(ii), getCacheName(dyn->insts[ninst].e.extcache[ii].t, dyn->insts[ninst].e.extcache[ii].n)); break;
+                case EXT_CACHE_SD: dynarec_log(LOG_NONE, " D%d:%s", EXTREG(ii), getCacheName(dyn->insts[ninst].e.extcache[ii].t, dyn->insts[ninst].e.extcache[ii].n)); break;
+                case EXT_CACHE_SCR: dynarec_log(LOG_NONE, " D%d:%s", EXTREG(ii), getCacheName(dyn->insts[ninst].e.extcache[ii].t, dyn->insts[ninst].e.extcache[ii].n)); break;
+                case EXT_CACHE_NONE:
+                default:    break;
+            }
+        }
+        if(dyn->e.stack || dyn->insts[ninst].e.stack_next || dyn->insts[ninst].e.x87stack)
+            dynarec_log(LOG_NONE, " X87:%d/%d(+%d/-%d)%d", dyn->e.stack, dyn->insts[ninst].e.stack_next, dyn->insts[ninst].e.stack_push, dyn->insts[ninst].e.stack_pop, dyn->insts[ninst].e.x87stack);
+        if(dyn->insts[ninst].e.combined1 || dyn->insts[ninst].e.combined2)
+            dynarec_log(LOG_NONE, " %s:%d/%d", dyn->insts[ninst].e.swapped?"SWP":"CMB", dyn->insts[ninst].e.combined1, dyn->insts[ninst].e.combined2);
+        dynarec_log(LOG_NONE, "%s\n", (box64_dynarec_dump>1)?"\e[m":"");
+    }
+}
+
+void print_opcode(dynarec_native_t* dyn, int ninst, uint32_t opcode)
+{
+    dynarec_log(LOG_NONE, "\t%08x\t%s\n", opcode, rv64_print(opcode, (uintptr_t)dyn->block));
+}
+
+void print_newinst(dynarec_native_t* dyn, int ninst)
+{
+    dynarec_log(LOG_NONE, "%sNew instruction %d, native=%p (0x%x)%s\n",
+        (box64_dynarec_dump>1)?"\e[4;32m":"",
+        ninst, dyn->block, dyn->native_size,
+        (box64_dynarec_dump>1)?"\e[m":""
+        );
 }

@@ -26,6 +26,7 @@ void addDBFromAddressRange(uintptr_t addr, size_t size);
 void cleanDBFromAddressRange(uintptr_t addr, size_t size, int destroy);
 
 dynablock_t* getDB(uintptr_t idx);
+int getNeedTest(uintptr_t idx);
 int addJumpTableIfDefault64(void* addr, void* jmp); // return 1 if write was succesfull
 int setJumpTableIfRef64(void* addr, void* jmp, void* ref); // return 1 if write was succesfull
 void setJumpTableDefault64(void* addr);
@@ -51,9 +52,10 @@ uintptr_t getJumpAddress64(uintptr_t addr);
 
 #define PROT_DYNAREC    0x80
 #define PROT_DYNAREC_R  0x40
-#define PROT_MMAP       0x20
-#define PROT_DYN        (PROT_DYNAREC | PROT_DYNAREC_R)
-#define PROT_CUSTOM     (PROT_DYNAREC | PROT_DYNAREC_R | PROT_MMAP)
+#define PROT_NOPROT     0x20
+#define PROT_MMAP       0x10
+#define PROT_DYN        (PROT_DYNAREC | PROT_DYNAREC_R | PROT_NOPROT)
+#define PROT_CUSTOM     (PROT_DYNAREC | PROT_DYNAREC_R | PROT_MMAP | PROT_NOPROT)
 
 void updateProtection(uintptr_t addr, size_t size, uint32_t prot);
 void setProtection(uintptr_t addr, size_t size, uint32_t prot);

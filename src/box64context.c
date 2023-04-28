@@ -143,6 +143,7 @@ static void init_mutexes(box64context_t* context)
     native_lock_store(&context->mutex_thread, 0);
     native_lock_store(&context->mutex_bridge, 0);
     native_lock_store(&context->mutex_dyndump, 0);
+    pthread_mutex_init(&context->mutex_lock, NULL);
 #endif
 }
 
@@ -191,7 +192,7 @@ box64context_t *NewBox64Context(int argc)
 
     initCycleLog(context);
 
-    context->deferedInit = 1;
+    context->deferredInit = 1;
     context->sel_serial = 1;
 
     init_custommem_helper(context);
@@ -200,8 +201,6 @@ box64context_t *NewBox64Context(int argc)
     context->local_maplib = NewLibrarian(context, 1);
     context->versym = NewDictionnary();
     context->system = NewBridge();
-    context->globaldefver = NewDefaultVersion();
-    context->weakdefver = NewDefaultVersion();
     // create vsyscall
     context->vsyscall = AddBridge(context->system, vFEv, x64Syscall, 0, NULL);
     // create the vsyscalls
@@ -251,8 +250,6 @@ void FreeBox64Context(box64context_t** context)
     if(ctx->maplib)
         FreeLibrarian(&ctx->maplib, NULL);
     FreeDictionnary(&ctx->versym);
-    FreeDefaultVersion(&ctx->globaldefver);
-    FreeDefaultVersion(&ctx->weakdefver);
 
     for(int i=0; i<ctx->elfsize; ++i) {
         FreeElfHeader(&ctx->elfs[i]);
@@ -268,8 +265,8 @@ void FreeBox64Context(box64context_t** context)
     if(ctx->zydis)
         DeleteX64Trace(ctx);
 
-    if(ctx->deferedInitList)
-        box_free(ctx->deferedInitList);
+    if(ctx->deferredInitList)
+        box_free(ctx->deferredInitList);
 
     /*box_free(ctx->argv);*/
     
@@ -325,7 +322,9 @@ void FreeBox64Context(box64context_t** context)
 
     finiAllHelpers(ctx);
 
-#ifndef DYNAREC
+#ifdef DYNAREC
+    pthread_mutex_destroy(&ctx->mutex_lock);
+#else
     pthread_mutex_destroy(&ctx->mutex_trace);
     pthread_mutex_destroy(&ctx->mutex_lock);
     pthread_mutex_destroy(&ctx->mutex_tls);
@@ -339,20 +338,44 @@ void FreeBox64Context(box64context_t** context)
 }
 
 int AddElfHeader(box64context_t* ctx, elfheader_t* head) {
-    int idx = ctx->elfsize;
-    if(idx==ctx->elfcap) {
-        // resize...
-        ctx->elfcap += 16;
-        ctx->elfs = (elfheader_t**)box_realloc(ctx->elfs, sizeof(elfheader_t*) * ctx->elfcap);
+    int idx = 0;
+    while(idx<ctx->elfsize && ctx->elfs[idx]) idx++;
+    if(idx == ctx->elfsize) {
+        if(idx==ctx->elfcap) {
+            // resize...
+            ctx->elfcap += 16;
+            ctx->elfs = (elfheader_t**)box_realloc(ctx->elfs, sizeof(elfheader_t*) * ctx->elfcap);
+        }
+        ctx->elfs[idx] = head;
+        ctx->elfsize++;
+    } else {
+        ctx->elfs[idx] = head;
     }
-    ctx->elfs[idx] = head;
-    ctx->elfsize++;
     printf_log(LOG_DEBUG, "Adding \"%s\" as #%d in elf collection\n", ElfName(head), idx);
     return idx;
 }
 
+void RemoveElfHeader(box64context_t* ctx, elfheader_t* head) {
+    if(GetTLSBase(head)) {
+        // should remove the tls info
+        int tlsbase = GetTLSBase(head);
+        /*if(tlsbase == -ctx->tlssize) {
+            // not really correct, but will do for now
+            ctx->tlssize -= GetTLSSize(head);
+            if(!(++ctx->sel_serial))
+                ++ctx->sel_serial;
+        }*/
+    }
+    for(int i=0; i<ctx->elfsize; ++i)
+        if(ctx->elfs[i] == head) {
+            ctx->elfs[i] = NULL;
+            return;
+        }
+}
+
 int AddTLSPartition(box64context_t* context, int tlssize) {
     int oldsize = context->tlssize;
+    // should in fact first try to map a hole, but rewinding all elfs and checking filled space, like with the mapmem utilities
     context->tlssize += tlssize;
     context->tlsdata = box_realloc(context->tlsdata, context->tlssize);
     memmove(context->tlsdata+tlssize, context->tlsdata, oldsize);   // move to the top, using memmove as regions will probably overlap

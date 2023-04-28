@@ -58,15 +58,15 @@ typedef struct extcache_s {
 
 typedef struct flagcache_s {
     int                 pending;    // is there a pending flags here, or to check?
-    int                 dfnone;     // if defered flags is already set to df_none
+    int                 dfnone;     // if deferred flags is already set to df_none
 } flagcache_t;
 
 typedef struct instruction_rv64_s {
     instruction_x64_t   x64;
-    uintptr_t           address;    // (start) address of the arm emited instruction
+    uintptr_t           address;    // (start) address of the arm emitted instruction
     uintptr_t           epilog;     // epilog of current instruction (can be start of next, or barrier stuff)
-    int                 size;       // size of the arm emited instruction
-    int                 size2;      // size of the arm emited instrucion after pass2
+    int                 size;       // size of the arm emitted instruction
+    int                 size2;      // size of the arm emitted instrucion after pass2
     int                 pred_sz;    // size of predecessor list
     int                 *pred;      // predecessor array
     uintptr_t           mark, mark2, mark3;
@@ -88,7 +88,7 @@ typedef struct dynarec_rv64_s {
     int32_t             cap;
     uintptr_t           start;      // start of the block
     uint32_t            isize;      // size in byte of x64 instructions included
-    void*               block;      // memory pointer where next instruction is emited
+    void*               block;      // memory pointer where next instruction is emitted
     uintptr_t           native_start;  // start of the arm code
     size_t              native_size;   // size of emitted arm code
     uintptr_t           last_ip;    // last set IP in RIP (or NULL if unclean state) TODO: move to a cache something
@@ -96,6 +96,7 @@ typedef struct dynarec_rv64_s {
     int                 table64size;// size of table (will be appended at end of executable code)
     int                 table64cap;
     uintptr_t           tablestart;
+    uintptr_t           jmp_next;   // address of the jump_next address
     flagcache_t         f;
     extcache_t          e;          // cache for the 10..31 0..1 double reg from fpu, plus x87 stack delta
     uintptr_t*          next;       // variable array of "next" jump address
@@ -111,6 +112,7 @@ typedef struct dynarec_rv64_s {
     uintptr_t           forward_to; // address of the next jump to (to check if everything is ok)
     int32_t             forward_size;   // size at the forward point
     int                 forward_ninst;  // ninst at the forward point
+    uint8_t             always_test;
 } dynarec_rv64_t;
 
 // convert idx (0..24) to reg index (10..31 0..1)
@@ -123,16 +125,16 @@ uintptr_t get_closest_next(dynarec_rv64_t *dyn, uintptr_t addr);
 int is_nops(dynarec_rv64_t *dyn, uintptr_t addr, int n);
 int is_instructions(dynarec_rv64_t *dyn, uintptr_t addr, int n);
 
-int Table64(dynarec_rv64_t *dyn, uint64_t val);  // add a value to etable64 (if needed) and gives back the imm19 to use in LDR_literal
+int Table64(dynarec_rv64_t *dyn, uint64_t val, int pass);  // add a value to etable64 (if needed) and gives back the imm19 to use in LDR_literal
 
 void CreateJmpNext(void* addr, void* next);
 
-#define GO_TRACE()          \
-    GETIP_(ip);             \
+#define GO_TRACE(A, B)      \
+    GETIP(addr);            \
     MV(A1, xRIP);           \
     STORE_XEMU_CALL();      \
-    MOV64x(A2, 1);          \
-    CALL(PrintTrace, -1);   \
+    MOV64x(A2, B);          \
+    CALL(A, -1);            \
     LOAD_XEMU_CALL()
 
 #endif //__DYNAREC_RV64_PRIVATE_H_

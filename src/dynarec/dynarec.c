@@ -52,9 +52,11 @@ void* LinkNext(x64emu_t* emu, uintptr_t addr, void* x2, uintptr_t* x3)
         }
         if(!block) {
             #ifdef HAVE_TRACE
-            dynablock_t* db = FindDynablockFromNativeAddress(x2-4);
-            elfheader_t* h = FindElfAddress(my_context, (uintptr_t)x2-4);
-            dynarec_log(LOG_INFO, "Warning, jumping to a no-block address %p from %p (db=%p, x64addr=%p(elf=%s))\n", (void*)addr, x2-4, db, db?(void*)getX64Address(db, (uintptr_t)x2-4):NULL, h?ElfName(h):"(none)");
+            if(LOG_INFO<=box64_dynarec_log) {
+                dynablock_t* db = FindDynablockFromNativeAddress(x2-4);
+                elfheader_t* h = FindElfAddress(my_context, (uintptr_t)x2-4);
+                dynarec_log(LOG_INFO, "Warning, jumping to a no-block address %p from %p (db=%p, x64addr=%p(elf=%s))\n", (void*)addr, x2-4, db, db?(void*)getX64Address(db, (uintptr_t)x2-4):NULL, h?ElfName(h):"(none)");
+            }
             #endif
             //tableupdate(native_epilog, addr, table);
             return native_epilog;
@@ -92,6 +94,13 @@ void DynaCall(x64emu_t* emu, uintptr_t addr)
             if(sigsetjmp((struct __jmp_buf_tag*)ejb->jmpbuf, 1)) {
                 printf_log(LOG_DEBUG, "Setjmp DynaCall, fs=0x%x\n", ejb->emu->segs[_FS]);
                 addr = R_RIP;   // not sure if it should still be inside DynaCall!
+                #ifdef DYNAREC
+                if(box64_dynarec_test) {
+                    if(emu->test.clean)
+                        x64test_check(emu, R_RIP);
+                    emu->test.clean = 0;
+                }
+                #endif
             }
         }
     }
@@ -115,7 +124,9 @@ void DynaCall(x64emu_t* emu, uintptr_t addr)
             if(!block || !block->block || !block->done) {
                 // no block, of block doesn't have DynaRec content (yet, temp is not null)
                 // Use interpreter (should use single instruction step...)
-                dynarec_log(LOG_DEBUG, "%04d|Calling Interpretor @%p, emu=%p\n", GetTID(), (void*)R_RIP, emu);
+                dynarec_log(LOG_DEBUG, "%04d|Calling Interpreter @%p, emu=%p\n", GetTID(), (void*)R_RIP, emu);
+                if(box64_dynarec_test)
+                    emu->test.clean = 0;
                 Run(emu, 1);
             } else {
                 dynarec_log(LOG_DEBUG, "%04d|Calling DynaRec Block @%p (%p) of %d x64 instructions emu=%p\n", GetTID(), (void*)R_RIP, block->block, block->isize ,emu);
@@ -177,6 +188,13 @@ int DynaRun(x64emu_t* emu)
 #endif
             if(sigsetjmp((struct __jmp_buf_tag*)ejb->jmpbuf, 1))
                 printf_log(LOG_DEBUG, "Setjmp DynaRun, fs=0x%x\n", ejb->emu->segs[_FS]);
+                #ifdef DYNAREC
+                if(box64_dynarec_test) {
+                    if(emu->test.clean)
+                        x64test_check(emu, R_RIP);
+                    emu->test.clean = 0;
+                }
+                #endif
         }
     }
 #ifdef DYNAREC
@@ -190,7 +208,9 @@ int DynaRun(x64emu_t* emu)
             if(!block || !block->block || !block->done) {
                 // no block, of block doesn't have DynaRec content (yet, temp is not null)
                 // Use interpreter (should use single instruction step...)
-                dynarec_log(LOG_DEBUG, "%04d|Running Interpretor @%p, emu=%p\n", GetTID(), (void*)R_RIP, emu);
+                dynarec_log(LOG_DEBUG, "%04d|Running Interpreter @%p, emu=%p\n", GetTID(), (void*)R_RIP, emu);
+                if(box64_dynarec_test)
+                    emu->test.clean = 0;
                 Run(emu, 1);
             } else {
                 dynarec_log(LOG_DEBUG, "%04d|Running DynaRec Block @%p (%p) of %d x64 insts emu=%p\n", GetTID(), (void*)R_RIP, block->block, block->isize, emu);

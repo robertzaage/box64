@@ -51,6 +51,7 @@ BOX64_DYNAREC_SAFEFLAGS=0
 BOX64_DYNAREC_BIGBLOCK=2
 BOX64_DYNAREC_FORWARD=1024
 BOX64_DYNAREC_CALLRET=1
+BOX64_DYNAREC_FASTROUND=0
 
 [heroic]
 BOX64_NOSANDBOX=1
@@ -70,6 +71,11 @@ BOX64_DYNAREC_CALLRET=1
 
 [pressure-vessel-wrap]
 BOX64_NOGTK=1
+
+[ProjectZomboid64]
+# This one is still a bit unstable. This might help, but will also slowdown emulation
+BOX64_DYNAREC_STRONGMEM=2
+BOX64_DYNAREC_SAFEFLAGS=2
 
 [Soma.bin.x86_64]
 # This is needed or the physics engine will not behave correctly
@@ -91,6 +97,9 @@ BOX64_DYNAREC_BIGBLOCK=0
 # if steamwebhelper takes too much memory, enable next line to disable it
 #BOX64_EXIT=1
 
+[Stardew Valley]
+BOX64_DYNAREC_HOTPAGE=0
+
 [steam-runtime-check-requirements]
 BOX64_EXIT=1
 
@@ -100,6 +109,10 @@ BOX64_DYNAREC_SAFEFLAGS=0
 BOX64_DYNAREC_BIGBLOCK=2
 BOX64_DYNAREC_FORWARD=512
 BOX64_DYNAREC_CALLRET=1
+
+[weixin]
+BOX64_MALLOC_HACK=2
+BOX64_NOSANDBOX=1
 
 #
 # Wine process

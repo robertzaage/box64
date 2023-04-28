@@ -132,8 +132,11 @@ f28–31  ft8–11  FP temporaries                  Caller
 #define JAL_gen(rd, imm21)             J_type(imm21, rd, 0b1101111)
 // Unconditional branch, no return address set
 #define B(imm21)                       EMIT(JAL_gen(xZR, imm21))
+#define B__(reg1, reg2, imm21)         B(imm21)
 // Unconditional branch, return set to xRA
 #define JAL(imm21)                     EMIT(JAL_gen(xRA, imm21))
+// Unconditional branch, without link
+#define J(imm21)                       EMIT(JAL_gen(xZR, imm21))
 
 #define JALR_gen(rd, rs1, imm12)       I_type(imm12, rs1, 0b000, rd, 0b1100111)
 // Unconditionnal branch to r, no return address set
@@ -204,6 +207,8 @@ f28–31  ft8–11  FP temporaries                  Caller
 #define NOT(rd, rs1)                XORI(rd, rs1, -1)
 // rd = -rs1
 #define NEG(rd, rs1)                SUB(rd, xZR, rs1)
+// rd = -rs1
+#define NEGxw(rd, rs1)              SUBxw(rd, xZR, rs1)
 // rd = rs1 == 0
 #define SEQZ(rd, rs1)               SLTIU(rd, rs1, 1)
 // rd = rs1 != 0
@@ -218,18 +223,18 @@ f28–31  ft8–11  FP temporaries                  Caller
 #define BGEU(rs1, rs2, imm13)      EMIT(B_type(imm13, rs2, rs1, 0b111, 0b1100011))
 
 // TODO: Find a better way to have conditionnal jumps? Imm is a relative jump address, so the the 2nd jump needs to be addapted
-#define BEQ_safe(rs1, rs2, imm)     if(imm>=-0x1000 && imm<=0x1000) {BEQ(rs1, rs2, imm); NOP();} else {BNE(rs1, rs2, 8); B(imm-4);}
-#define BNE_safe(rs1, rs2, imm)     if(imm>=-0x1000 && imm<=0x1000) {BNE(rs1, rs2, imm); NOP();} else {BEQ(rs1, rs2, 8); B(imm-4);}
-#define BLT_safe(rs1, rs2, imm)     if(imm>=-0x1000 && imm<=0x1000) {BLT(rs1, rs2, imm); NOP();} else {BGE(rs2, rs1, 8); B(imm-4);}
-#define BGE_safe(rs1, rs2, imm)     if(imm>=-0x1000 && imm<=0x1000) {BGE(rs1, rs2, imm); NOP();} else {BLT(rs2, rs1, 8); B(imm-4);}
-#define BLTU_safe(rs1, rs2, imm)    if(imm>=-0x1000 && imm<=0x1000) {BLTU(rs1, rs2, imm); NOP();} else {BGEU(rs2, rs1, 8); B(imm-4);}
-#define BGEU_safe(rs1, rs2, imm)    if(imm>=-0x1000 && imm<=0x1000) {BGEU(rs1, rs2, imm); NOP();} else {BLTU(rs2, rs1, 8); B(imm-4);}
+#define BEQ_safe(rs1, rs2, imm)     if((imm)>-0x1000 && (imm)<0x1000) {BEQ(rs1, rs2, imm); NOP();} else {BNE(rs1, rs2, 8); B(imm-4);}
+#define BNE_safe(rs1, rs2, imm)     if((imm)>-0x1000 && (imm)<0x1000) {BNE(rs1, rs2, imm); NOP();} else {BEQ(rs1, rs2, 8); B(imm-4);}
+#define BLT_safe(rs1, rs2, imm)     if((imm)>-0x1000 && (imm)<0x1000) {BLT(rs1, rs2, imm); NOP();} else {BGE(rs2, rs1, 8); B(imm-4);}
+#define BGE_safe(rs1, rs2, imm)     if((imm)>-0x1000 && (imm)<0x1000) {BGE(rs1, rs2, imm); NOP();} else {BLT(rs2, rs1, 8); B(imm-4);}
+#define BLTU_safe(rs1, rs2, imm)    if((imm)>-0x1000 && (imm)<0x1000) {BLTU(rs1, rs2, imm); NOP();} else {BGEU(rs2, rs1, 8); B(imm-4);}
+#define BGEU_safe(rs1, rs2, imm)    if((imm)>-0x1000 && (imm)<0x1000) {BGEU(rs1, rs2, imm); NOP();} else {BLTU(rs2, rs1, 8); B(imm-4);}
 
 #define BEQZ(rs1, imm13)           BEQ(rs1, 0, imm13)
 #define BNEZ(rs1, imm13)           BNE(rs1, 0, imm13)
 
-#define BEQZ_safe(rs1, imm)         if(imm>=-0x1000 && imm<=0x1000) {BEQZ(rs1, imm); NOP();} else {BNEZ(rs1, 8); B(imm-4);}
-#define BNEZ_safe(rs1, imm)         if(imm>=-0x1000 && imm<=0x1000) {BNEZ(rs1, imm); NOP();} else {BEQZ(rs1, 8); B(imm-4);}
+#define BEQZ_safe(rs1, imm)         if((imm)>-0x1000 && (imm)<0x1000) {BEQZ(rs1, imm); NOP();} else {BNEZ(rs1, 8); B(imm-4);}
+#define BNEZ_safe(rs1, imm)         if((imm)>-0x1000 && (imm)<0x1000) {BNEZ(rs1, imm); NOP();} else {BEQZ(rs1, 8); B(imm-4);}
 
 // rd = 4-bytes[rs1+imm12] signed extended
 #define LW(rd, rs1, imm12)          EMIT(I_type(imm12, rs1, 0b010, rd, 0b0000011))
@@ -256,6 +261,8 @@ f28–31  ft8–11  FP temporaries                  Caller
 
 #define FENCE_I_gen()               ((0b001<<12) | 0b0001111)
 #define FENCE_I()                   EMIT(FENCE_I_gen())
+
+#define EBREAK()                    EMIT(I_type(1, 0, 0, 0, 0b1110011))
 
 // RV64I
 #define LWU(rd, rs1, imm12)         EMIT(I_type(imm12, rs1, 0b110, rd, 0b0000011))
@@ -290,6 +297,8 @@ f28–31  ft8–11  FP temporaries                  Caller
 // rd = rs1>>rs2 arithmetic
 #define SRAW(rd, rs1, rs2)           EMIT(R_type(0b0100000, rs2, rs1, 0b101, rd, 0b0111011))
 
+#define SLLxw(rd, rs1, rs2)          EMIT(R_type(0b0000000, rs2, rs1, 0b001, rd, rex.w?0b0110011:0b0111011))
+#define SRLxw(rd, rs1, rs2)          EMIT(R_type(0b0000000, rs2, rs1, 0b101, rd, rex.w?0b0110011:0b0111011))
 #define SRAxw(rd, rs1, rs2)          if(rex.w) {SRA(rd, rs1, rs2);} else {SRAW(rd, rs1, rs2); ZEROUP(rd);}
 
 // Shift Left Immediate, 32-bit, sign-extended
@@ -360,8 +369,37 @@ f28–31  ft8–11  FP temporaries                  Caller
 // RV32F
 // Read round mode
 #define FRRM(rd)                    CSRRS(rd, xZR, 0x002)
-// Swap round mode with rd
-#define FSRM(rd)                    CSRRWI(rd, 0b111, 0x002)
+// Swap round mode
+#define FSRM(rd, rs)                CSRRW(rd, rs, 0x002)
+// Write FP exception flags, immediate
+#define FSFLAGSI(imm)               CSRRWI(xZR, imm, 0x0001)
+// Read  FP exception flags to rd
+#define FRFLAGS(rd)                 CSRRS(rd, xZR, 0x0001)
+// Inexact
+#define FR_NX   0
+// Underflow
+#define FR_UF   1
+// Overflow
+#define FR_OF   2
+// Divide by Zero
+#define FR_DZ   3
+// Invalid Operation
+#define FR_NV   4
+
+// Round to Nearest, ties to Even
+#define RD_RNE      0b000
+// Round towards Zero
+#define RD_RTZ      0b001
+// Round Down (towards −∞)
+#define RD_RDN      0b010
+// Round Up (towards +∞)
+#define RD_RUP      0b011
+// Round to Nearest, ties to Max Magnitude
+#define RD_RMM      0b100
+// In instruction’s rm field, selects dynamic rounding mode;
+#define RD_RM       0b111
+#define RD_DYN      RD_RM
+
 // load single precision from rs1+imm12 to frd
 #define FLW(frd, rs1, imm12)        EMIT(I_type(imm12, rs1, 0b010, frd, 0b0000111))
 // store single precision frs2 to rs1+imm12
@@ -382,6 +420,35 @@ f28–31  ft8–11  FP temporaries                  Caller
 #define FMVXW(rd, frs1)             EMIT(R_type(0b1110000, 0b00000, frs1, 0b000, rd, 0b1010011))
 // Move to Single
 #define FMVWX(frd, rs1)             EMIT(R_type(0b1111000, 0b00000, rs1, 0b000, frd, 0b1010011))
+// Convert from signed 32bits to Single
+#define FCVTSW(frd, rs1, rm)        EMIT(R_type(0b1101000, 0b00000, rs1, rm, frd, 0b1010011))
+// Convert from Single to signed 32bits (trucated)
+#define FCVTWS(rd, frs1, rm)        EMIT(R_type(0b1100000, 0b00000, frs1, rm, rd, 0b1010011))
+
+#define FADDS(frd, frs1, frs2)      EMIT(R_type(0b0000000, frs2, frs1, 0b000, frd, 0b1010011))
+#define FSUBS(frd, frs1, frs2)      EMIT(R_type(0b0000100, frs2, frs1, 0b000, frd, 0b1010011))
+#define FMULS(frd, frs1, frs2)      EMIT(R_type(0b0001000, frs2, frs1, 0b000, frd, 0b1010011))
+#define FDIVS(frd, frs1, frs2)      EMIT(R_type(0b0001100, frs2, frs1, 0b000, frd, 0b1010011))
+#define FSQRTS(frd, frs1)           EMIT(R_type(0b0101100, 0b00000, frs1, 0b000, frd, 0b1010011))
+#define FMINS(frd, frs1, frs2)      EMIT(R_type(0b0010100, frs2, frs1, 0b000, frd, 0b1010011))
+#define FMAXS(frd, frs1, frs2)      EMIT(R_type(0b0010100, frs2, frs1, 0b001, frd, 0b1010011))
+
+// compare
+#define FEQS(rd, frs1, frs2)        EMIT(R_type(0b1010000, frs2, frs1, 0b010, rd, 0b1010011))
+#define FLTS(rd, frs1, frs2)        EMIT(R_type(0b1010000, frs2, frs1, 0b001, rd, 0b1010011))
+#define FLES(rd, frs1, frs2)        EMIT(R_type(0b1010000, frs2, frs1, 0b000, rd, 0b1010011))
+
+// RV64F
+// Convert from signed 64bits to Single
+#define FCVTSL(frd, rs1, rm)        EMIT(R_type(0b1101000, 0b00010, rs1, rm, frd, 0b1010011))
+// Convert from unsigned 64bits to Single
+#define FCVTSLU(frd, rs1, rm)       EMIT(R_type(0b1101000, 0b00011, rs1, rm, frd, 0b1010011))
+// Convert from Single to signed 64bits
+#define FCVTLS(rd, frs1, rm)        EMIT(R_type(0b1100000, 0b00010, frs1, rm, rd, 0b1010011))
+// Convert from Single to unsigned 64bits
+#define FCVTLUS(rd, frs1, rm)       EMIT(R_type(0b1100000, 0b00011, frs1, rm, rd, 0b1010011))
+// onvert from Single to signed 32/64bits (trucated)
+#define FCVTSxw(rd, frs1, rm)       EMIT(R_type(0b1100000, rex.w?0b00010:0b00000, frs1, rm, rd, 0b1010011))
 
 // RV32D
 // load double precision from rs1+imm12 to frd
@@ -392,6 +459,10 @@ f28–31  ft8–11  FP temporaries                  Caller
 #define FCVTSD(frd, frs1)           EMIT(R_type(0b0100000, 0b00001, frs1, 0b000, frd, 0b1010011))
 // Convert Single frs1 to Double frd
 #define FCVTDS(frd, frs1)           EMIT(R_type(0b0100001, 0b00000, frs1, 0b000, frd, 0b1010011))
+// Convert from Double to signed 32bits
+#define FCVTWD(rd, frs1, rm)        EMIT(R_type(0b1100001, 0b00000, frs1, rm, rd, 0b1010011))
+// Convert from Double to unsigned 32bits
+#define FCVTWUD(rd, frs1, rm)       EMIT(R_type(0b1100001, 0b00001, frs1, rm, rd, 0b1010011))
 // store rs1 with rs2 sign bit to rd
 #define FSGNJD(rd, rs1, rs2)        EMIT(R_type(0b0010001, rs2, rs1, 0b000, rd, 0b1010011))
 // move rs1 to rd
@@ -404,11 +475,38 @@ f28–31  ft8–11  FP temporaries                  Caller
 #define FSGNJXD(rd, rs1, rs2)       EMIT(R_type(0b0010001, rs2, rs1, 0b010, rd, 0b1010011))
 // |rs1| => rd
 #define FABSD(rd, rs1)              FSGNJXD(rd, rs1, rs1)
+// Convert from signed 32bits to Double
+#define FCVTDW(frd, rs1, rm)        EMIT(R_type(0b1101001, 0b00000, rs1, rm, frd, 0b1010011))
+
+#define FEQD(rd, frs1, frs2)        EMIT(R_type(0b1010001, frs2, frs1, 0b010, rd, 0b1010011))
+#define FLTD(rd, frs1, frs2)        EMIT(R_type(0b1010001, frs2, frs1, 0b001, rd, 0b1010011))
+#define FLED(rd, frs1, frs2)        EMIT(R_type(0b1010001, frs2, frs1, 0b000, rd, 0b1010011))
+
+#define FADDD(frd, frs1, frs2)      EMIT(R_type(0b0000001, frs2, frs1, 0b000, frd, 0b1010011))
+#define FSUBD(frd, frs1, frs2)      EMIT(R_type(0b0000101, frs2, frs1, 0b000, frd, 0b1010011))
+#define FMULD(frd, frs1, frs2)      EMIT(R_type(0b0001001, frs2, frs1, 0b000, frd, 0b1010011))
+#define FDIVD(frd, frs1, frs2)      EMIT(R_type(0b0001101, frs2, frs1, 0b000, frd, 0b1010011))
+#define FSQRTD(frd, frs1)           EMIT(R_type(0b0101101, 0b00000, frs1, 0b000, frd, 0b1010011))
+#define FMIND(frd, frs1, frs2)      EMIT(R_type(0b0010101, frs2, frs1, 0b000, frd, 0b1010011))
+#define FMAXD(frd, frs1, frs2)      EMIT(R_type(0b0010101, frs2, frs1, 0b001, frd, 0b1010011))
 
 //RV64D
 // Move from Double
 #define FMVXD(rd, frs1)             EMIT(R_type(0b1110001, 0b00000, frs1, 0b000, rd, 0b1010011))
 // Move to Double
 #define FMVDX(frd, rs1)             EMIT(R_type(0b1111001, 0b00000, rs1, 0b000, frd, 0b1010011))
+// Convert from signed 64bits to Double
+#define FCVTDL(frd, rs1, rm)        EMIT(R_type(0b1101001, 0b00010, rs1, rm, frd, 0b1010011))
+// Convert from unsigned 64bits to Double
+#define FCVTDLU(frd, rs1, rm)       EMIT(R_type(0b1101001, 0b00011, rs1, rm, frd, 0b1010011))
+// Convert from Double to signed 64bits
+#define FCVTLD(rd, frs1, rm)        EMIT(R_type(0b1100001, 0b00010, frs1, rm, rd, 0b1010011))
+// Convert from Double to unsigned 64bits
+#define FCVTLUD(rd, frs1, rm)       EMIT(R_type(0b1100001, 0b00011, frs1, rm, rd, 0b1010011))
+
+// Convert from Double to signed integer
+#define FCVTLDxw(rd, frs1, rm)      EMIT(R_type(0b1100001, 0b00000+(rex.w?0b10:0b00), frs1, rm, rd, 0b1010011))
+// Convert from Double to unsigned integer
+#define FCVTLUDxw(rd, frs1, rm)     EMIT(R_type(0b1100001, 0b00001+(rex.w?0b10:0b00), frs1, rm, rd, 0b1010011))
 
 #endif //__RV64_EMITTER_H__

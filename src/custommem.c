@@ -26,6 +26,7 @@
 #include "threads.h"
 #ifdef DYNAREC
 #include "dynablock.h"
+#include "dynarec/dynablock_private.h"
 #include "dynarec/native_lock.h"
 #include "dynarec/dynarec_next.h"
 
@@ -589,6 +590,7 @@ static uintptr_t getDBSize(uintptr_t addr, size_t maxsize, dynablock_t** db)
     uintptr_t* block = box64_jmptbl3[idx3][idx2][idx1];
     if(block == box64_jmptbldefault0)
         return (((addr>>JMPTABL_START1)+1)<<JMPTABL_START1);
+    maxsize+=idx0;  // need to adjust maxsize to "end in current block"
     if (maxsize>JMPTABLE_MASK0)
         maxsize = JMPTABLE_MASK0;
     while(block[idx0]==(uintptr_t)native_next) {
@@ -770,6 +772,28 @@ dynablock_t* getDB(uintptr_t addr)
     return *(dynablock_t**)(ret - sizeof(void*));
 }
 
+int getNeedTest(uintptr_t addr)
+{
+    uintptr_t idx3, idx2, idx1, idx0;
+    idx3 = ((addr)>>JMPTABL_START3)&JMPTABLE_MASK3;
+    idx2 = ((addr)>>JMPTABL_START2)&JMPTABLE_MASK2;
+    idx1 = ((addr)>>JMPTABL_START1)&JMPTABLE_MASK1;
+    idx0 = ((addr)                )&JMPTABLE_MASK0;
+    uintptr_t ret = (uintptr_t)box64_jmptbl3[idx3][idx2][idx1][idx0];
+    dynablock_t* db = *(dynablock_t**)(ret - sizeof(void*));
+    return db?((ret!=(uintptr_t)db->block)?1:0):0;
+}
+
+uintptr_t getJumpAddress64(uintptr_t addr)
+{
+    uintptr_t idx3, idx2, idx1, idx0;
+    idx3 = ((addr)>>JMPTABL_START3)&JMPTABLE_MASK3;
+    idx2 = ((addr)>>JMPTABL_START2)&JMPTABLE_MASK2;
+    idx1 = ((addr)>>JMPTABL_START1)&JMPTABLE_MASK1;
+    idx0 = ((addr)                )&JMPTABLE_MASK0;
+    return (uintptr_t)box64_jmptbl3[idx3][idx2][idx1][idx0];
+}
+
 // Remove the Write flag from an adress range, so DB can be executed safely
 void protectDB(uintptr_t addr, uintptr_t size)
 {
@@ -795,14 +819,16 @@ void protectDB(uintptr_t addr, uintptr_t size)
         uint32_t prot = memprot[i>>16].prot[i&0xffff];
         uint32_t dyn = prot&PROT_DYN;
         uint32_t mapped = prot&PROT_MMAP;
-        prot&=~PROT_CUSTOM;
         if(!prot)
             prot = PROT_READ | PROT_WRITE | PROT_EXEC;      // comes from malloc & co, so should not be able to execute
-        if((prot&PROT_WRITE)) {
-            if(!dyn) mprotect((void*)(i<<MEMPROT_SHIFT), 1<<MEMPROT_SHIFT, prot&~PROT_WRITE);
-            memprot[i>>16].prot[i&0xffff] = prot|mapped|PROT_DYNAREC;   // need to use atomic exchange?
-        } else 
-            memprot[i>>16].prot[i&0xffff] = prot|mapped|PROT_DYNAREC_R;
+        prot&=~PROT_CUSTOM;
+        if(!(dyn&PROT_NOPROT)) {
+            if(prot&PROT_WRITE) {
+                if(!dyn) mprotect((void*)(i<<MEMPROT_SHIFT), 1<<MEMPROT_SHIFT, prot&~PROT_WRITE);
+                    memprot[i>>16].prot[i&0xffff] = prot|mapped|PROT_DYNAREC;   // need to use atomic exchange?
+                } else 
+                    memprot[i>>16].prot[i&0xffff] = prot|mapped|PROT_DYNAREC_R;
+        }
     }
     mutex_unlock(&mutex_prot);
 }
@@ -824,14 +850,16 @@ void unprotectDB(uintptr_t addr, size_t size, int mark)
             i=(((i>>16)+1)<<16)-1;  // next block
         } else {
             uint32_t prot = memprot[i>>16].prot[i&0xffff];
-            if(prot&PROT_DYNAREC) {
-                prot&=~PROT_DYN;
-                if(mark)
-                    cleanDBFromAddressRange((i<<MEMPROT_SHIFT), 1<<MEMPROT_SHIFT, 0);
-                mprotect((void*)(i<<MEMPROT_SHIFT), 1<<MEMPROT_SHIFT, prot&~PROT_MMAP);
-                memprot[i>>16].prot[i&0xffff] = prot;  // need to use atomic exchange?
-            } else if(prot&PROT_DYNAREC_R)
-                memprot[i>>16].prot[i&0xffff] = prot&~PROT_CUSTOM;
+            if(!(prot&PROT_NOPROT)) {
+                if(prot&PROT_DYNAREC) {
+                    prot&=~PROT_DYN;
+                    if(mark)
+                        cleanDBFromAddressRange((i<<MEMPROT_SHIFT), 1<<MEMPROT_SHIFT, 0);
+                    mprotect((void*)(i<<MEMPROT_SHIFT), 1<<MEMPROT_SHIFT, prot&~PROT_MMAP);
+                    memprot[i>>16].prot[i&0xffff] = prot;  // need to use atomic exchange?
+                } else if(prot&PROT_DYNAREC_R)
+                    memprot[i>>16].prot[i&0xffff] = prot&~PROT_CUSTOM;
+            }
         }
     }
     mutex_unlock(&mutex_prot);
@@ -977,11 +1005,13 @@ void updateProtection(uintptr_t addr, size_t size, uint32_t prot)
         uint32_t old_prot = memprot[i>>16].prot[i&0xffff];
         uint32_t dyn=(old_prot&PROT_DYN);
         uint32_t mapped=(old_prot&PROT_MMAP);
-        if(dyn && (prot&PROT_WRITE)) {   // need to remove the write protection from this block
-            dyn = PROT_DYNAREC;
-            mprotect((void*)(i<<MEMPROT_SHIFT), 1<<MEMPROT_SHIFT, prot&~PROT_WRITE);
-        } else if(dyn && !(prot&PROT_WRITE)) {
-            dyn = PROT_DYNAREC_R;
+        if(!(dyn&PROT_NOPROT)) {
+            if(dyn && (prot&PROT_WRITE)) {   // need to remove the write protection from this block
+                dyn = PROT_DYNAREC;
+                mprotect((void*)(i<<MEMPROT_SHIFT), 1<<MEMPROT_SHIFT, prot&~PROT_WRITE);
+            } else if(dyn && !(prot&PROT_WRITE)) {
+                dyn = PROT_DYNAREC_R;
+            }
         }
         memprot[i>>16].prot[i&0xffff] = prot|dyn|mapped;
     }
@@ -1026,8 +1056,10 @@ void refreshProtection(uintptr_t addr)
     uintptr_t idx = (addr>>MEMPROT_SHIFT);
     if(memprot[idx>>16].prot!=memprot_default) {
         int prot = memprot[idx>>16].prot[idx&0xffff];
-        int ret = mprotect((void*)(idx<<MEMPROT_SHIFT), box64_pagesize, prot&~PROT_CUSTOM);
+        if(!(prot&PROT_DYNAREC)) {
+            int ret = mprotect((void*)(idx<<MEMPROT_SHIFT), box64_pagesize, prot&~PROT_CUSTOM);
 printf_log(LOG_INFO, "refreshProtection(%p): %p/0x%x (ret=%d/%s)\n", (void*)addr, (void*)(idx<<MEMPROT_SHIFT), prot, ret, ret?strerror(errno):"ok");
+        }
     }
     mutex_unlock(&mutex_prot);
 }
@@ -1362,7 +1394,7 @@ void init_custommem_helper(box64context_t* ctx)
     loadProtectionFromMap();
     // check if PageSize is correctly defined
     if(box64_pagesize != (1<<MEMPROT_SHIFT)) {
-        printf_log(LOG_NONE, "Error: PageSize configuation is wrong: configured with %d, but got %zd\n", 1<<MEMPROT_SHIFT, box64_pagesize);
+        printf_log(LOG_NONE, "Error: PageSize configuration is wrong: configured with %d, but got %zd\n", 1<<MEMPROT_SHIFT, box64_pagesize);
         exit(-1);   // abort or let it continue?
     }
 }

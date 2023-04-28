@@ -1068,7 +1068,7 @@
 #define FMLA_vector(Q, op, sz, Rm, Rn, Rd)	((Q)<<30 | 0b01110<<24 | (op)<<23 | (sz)<<22 | 1<<21 | (Rm)<<16 | 0b11001<<11 | 1<<10 | (Rn)<<5 | (Rd))
 #define VFMLAS(Sd, Sn, Sm)	        EMIT(FMLA_vector(0, 0, 0, Sm, Sn, Sd))
 #define VFMLAQS(Sd, Sn, Sm)	        EMIT(FMLA_vector(1, 0, 0, Sm, Sn, Sd))
-#define CFMLAQD(Dd, Dn, Dm)	        EMIT(FMLA_vector(1, 0, 1, Dm, Dn, Dd))
+#define VFMLAQD(Dd, Dn, Dm)	        EMIT(FMLA_vector(1, 0, 1, Dm, Dn, Dd))
 
 // DIV
 #define FDIV_vector(Q, sz, Rm, Rn, Rd)  ((Q)<<30 | 1<<29 | 0b01110<<24 | (sz)<<22 | 1<<21 | (Rm)<<16 | 0b11111<<11 | 1<<10 | (Rn)<<5 | (Rd))
@@ -1266,6 +1266,12 @@
 #define FCVT_D_S(Dd, Sn)            EMIT(FCVT_precision(0b00, 0b01, Sn, Dd))
 #define FCVT_S_D(Sd, Dn)            EMIT(FCVT_precision(0b01, 0b00, Dn, Sd))
 
+#define FCVTN_vector(Q, sz, Rn, Rd)   ((Q)<<30 | 0<<29 | 0b01110<<24 | (sz)<<22 | 0b10000<<17 | 0b10110<<12 | 0b10<<10 | (Rn)<<5 | (Rd))
+// Convert Vn from 2*Double to lower Vd as 2*float and clears the upper half, use FPCR rounding
+#define FCVTN(Vd, Vn)               EMIT(FCVTN_vector(0, 1, Vn, Vd))
+// Convert Vn from 2*Double to higher Vd as 2*float, use FPCR rounding
+#define FCVTN2(Vd, Vn)              EMIT(FCVTN_vector(1, 1, Vn, Vd))
+
 #define FCVTXN_vector(Q, sz, Rn, Rd)   ((Q)<<30 | 1<<29 | 0b01110<<24 | (sz)<<22 | 0b10000<<17 | 0b10110<<12 | 0b10<<10 | (Rn)<<5 | (Rd))
 // Convert Vn from 2*Double to lower Vd as 2*float and clears the upper half
 #define FCVTXN(Vd, Vn)              EMIT(FCVTXN_vector(0, 1, Vn, Vd))
@@ -1301,6 +1307,10 @@
 #define VFRINTIS(Vd,Vn)             EMIT(FRINT_vector(0, 1, 1, 0, 1, Vn, Vd))
 #define VFRINTISQ(Vd,Vn)            EMIT(FRINT_vector(1, 1, 1, 0, 1, Vn, Vd))
 #define VFRINTIDQ(Vd,Vn)            EMIT(FRINT_vector(1, 1, 1, 1, 1, Vn, Vd))
+// round with mode, mode is 0 = TieEven, 1=+inf, 2=-inf, 3=zero
+#define VFRINTRDQ(Vd,Vn, mode)      EMIT(FRINT_vector(1, 0, (mode)&1, 1, ((mode)>>1)&1, Vn, Vd))
+// round with mode, mode is 0 = TieEven, 1=+inf, 2=-inf, 3=zero
+#define VFRINTRSQ(Vd,Vn, mode)      EMIT(FRINT_vector(1, 0, (mode)&1, 0, ((mode)>>1)&1, Vn, Vd))
 
 #define FRINTI_scalar(type, Rn, Rd)  (0b11110<<24 | (type)<<22 | 1<<21 | 0b001<<18 | 0b111<<15 | 0b10000<<10 | (Rn)<<5 | (Rd))
 #define FRINTIS(Sd, Sn)             EMIT(FRINTI_scalar(0b00, Sn, Sd))
@@ -1685,6 +1695,8 @@
 #define MOVI_vector(Q, op, abc, cmode, defgh, Rd)   ((Q)<<30 | (op)<<29 | 0b0111100000<<19 | (abc)<<16 | (cmode)<<12 | 1<<10 | (defgh)<<5 | (Rd))
 #define MOVIQ_8(Rd, imm8)           EMIT(MOVI_vector(1, 0, (((imm8)>>5)&0b111), 0b1110, ((imm8)&0b11111), Rd))
 #define MOVI_8(Rd, imm8)            EMIT(MOVI_vector(0, 0, (((imm8)>>5)&0b111), 0b1110, ((imm8)&0b11111), Rd))
+#define MOVI_16(Rd, imm8)           EMIT(MOVI_vector(0, 0, (((imm8)>>5)&0b111), 0b1000, ((imm8)&0b11111), Rd))
+#define MOVI_32(Rd, imm8)           EMIT(MOVI_vector(0, 0, (((imm8)>>5)&0b111), 0b0000, ((imm8)&0b11111), Rd))
 
 // SHLL and eXtend Long
 #define SHLL_vector(Q, U, immh, immb, Rn, Rd)  ((Q)<<30 | (U)<<29 | 0b011110<<23 | (immh)<<19 | (immb)<<16 | 0b10100<<11 | 1<<10 | (Rn)<<5 | (Rd))
@@ -1754,35 +1766,35 @@
 #define SMAX_8(Vd, Vn, Vm)          EMIT(MINMAX_vector(0, 0, 0b00, Vm, 0, Vn, Vd))
 #define SMAX_16(Vd, Vn, Vm)         EMIT(MINMAX_vector(0, 0, 0b01, Vm, 0, Vn, Vd))
 #define SMAX_32(Vd, Vn, Vm)         EMIT(MINMAX_vector(0, 0, 0b10, Vm, 0, Vn, Vd))
-#define SMAX_64(Vd, Vn, Vm)         EMIT(MINMAX_vector(0, 0, 0b11, Vm, 0, Vn, Vd))
+//#define SMAX_64(Vd, Vn, Vm)         EMIT(MINMAX_vector(0, 0, 0b11, Vm, 0, Vn, Vd))
 #define UMAX_8(Vd, Vn, Vm)          EMIT(MINMAX_vector(0, 1, 0b00, Vm, 0, Vn, Vd))
 #define UMAX_16(Vd, Vn, Vm)         EMIT(MINMAX_vector(0, 1, 0b01, Vm, 0, Vn, Vd))
 #define UMAX_32(Vd, Vn, Vm)         EMIT(MINMAX_vector(0, 1, 0b10, Vm, 0, Vn, Vd))
-#define UMAX_64(Vd, Vn, Vm)         EMIT(MINMAX_vector(0, 1, 0b11, Vm, 0, Vn, Vd))
+//#define UMAX_64(Vd, Vn, Vm)         EMIT(MINMAX_vector(0, 1, 0b11, Vm, 0, Vn, Vd))
 #define SMIN_8(Vd, Vn, Vm)          EMIT(MINMAX_vector(0, 0, 0b00, Vm, 1, Vn, Vd))
 #define SMIN_16(Vd, Vn, Vm)         EMIT(MINMAX_vector(0, 0, 0b01, Vm, 1, Vn, Vd))
 #define SMIN_32(Vd, Vn, Vm)         EMIT(MINMAX_vector(0, 0, 0b10, Vm, 1, Vn, Vd))
-#define SMIN_64(Vd, Vn, Vm)         EMIT(MINMAX_vector(0, 0, 0b11, Vm, 1, Vn, Vd))
+//#define SMIN_64(Vd, Vn, Vm)         EMIT(MINMAX_vector(0, 0, 0b11, Vm, 1, Vn, Vd))
 #define UMIN_8(Vd, Vn, Vm)          EMIT(MINMAX_vector(0, 1, 0b00, Vm, 1, Vn, Vd))
 #define UMIN_16(Vd, Vn, Vm)         EMIT(MINMAX_vector(0, 1, 0b01, Vm, 1, Vn, Vd))
 #define UMIN_32(Vd, Vn, Vm)         EMIT(MINMAX_vector(0, 1, 0b10, Vm, 1, Vn, Vd))
-#define UMIN_64(Vd, Vn, Vm)         EMIT(MINMAX_vector(0, 1, 0b11, Vm, 1, Vn, Vd))
+//#define UMIN_64(Vd, Vn, Vm)         EMIT(MINMAX_vector(0, 1, 0b11, Vm, 1, Vn, Vd))
 #define SMAXQ_8(Vd, Vn, Vm)         EMIT(MINMAX_vector(1, 0, 0b00, Vm, 0, Vn, Vd))
 #define SMAXQ_16(Vd, Vn, Vm)        EMIT(MINMAX_vector(1, 0, 0b01, Vm, 0, Vn, Vd))
 #define SMAXQ_32(Vd, Vn, Vm)        EMIT(MINMAX_vector(1, 0, 0b10, Vm, 0, Vn, Vd))
-#define SMAXQ_64(Vd, Vn, Vm)        EMIT(MINMAX_vector(1, 0, 0b11, Vm, 0, Vn, Vd))
+//#define SMAXQ_64(Vd, Vn, Vm)        EMIT(MINMAX_vector(1, 0, 0b11, Vm, 0, Vn, Vd))
 #define UMAXQ_8(Vd, Vn, Vm)         EMIT(MINMAX_vector(1, 1, 0b00, Vm, 0, Vn, Vd))
 #define UMAXQ_16(Vd, Vn, Vm)        EMIT(MINMAX_vector(1, 1, 0b01, Vm, 0, Vn, Vd))
 #define UMAXQ_32(Vd, Vn, Vm)        EMIT(MINMAX_vector(1, 1, 0b10, Vm, 0, Vn, Vd))
-#define UMAXQ_64(Vd, Vn, Vm)        EMIT(MINMAX_vector(1, 1, 0b11, Vm, 0, Vn, Vd))
+//#define UMAXQ_64(Vd, Vn, Vm)        EMIT(MINMAX_vector(1, 1, 0b11, Vm, 0, Vn, Vd))
 #define SMINQ_8(Vd, Vn, Vm)         EMIT(MINMAX_vector(1, 0, 0b00, Vm, 1, Vn, Vd))
 #define SMINQ_16(Vd, Vn, Vm)        EMIT(MINMAX_vector(1, 0, 0b01, Vm, 1, Vn, Vd))
 #define SMINQ_32(Vd, Vn, Vm)        EMIT(MINMAX_vector(1, 0, 0b10, Vm, 1, Vn, Vd))
-#define SMINQ_64(Vd, Vn, Vm)        EMIT(MINMAX_vector(1, 0, 0b11, Vm, 1, Vn, Vd))
+//#define SMINQ_64(Vd, Vn, Vm)        EMIT(MINMAX_vector(1, 0, 0b11, Vm, 1, Vn, Vd))
 #define UMINQ_8(Vd, Vn, Vm)         EMIT(MINMAX_vector(1, 1, 0b00, Vm, 1, Vn, Vd))
 #define UMINQ_16(Vd, Vn, Vm)        EMIT(MINMAX_vector(1, 1, 0b01, Vm, 1, Vn, Vd))
 #define UMINQ_32(Vd, Vn, Vm)        EMIT(MINMAX_vector(1, 1, 0b10, Vm, 1, Vn, Vd))
-#define UMINQ_64(Vd, Vn, Vm)        EMIT(MINMAX_vector(1, 1, 0b11, Vm, 1, Vn, Vd))
+//#define UMINQ_64(Vd, Vn, Vm)        EMIT(MINMAX_vector(1, 1, 0b11, Vm, 1, Vn, Vd))
 
 // HADD vector
 #define HADD_vector(Q, U, size, Rm, Rn, Rd)     ((Q)<<30 | (U)<<29 | 0b01110<<24 | (size)<<22 | 1<<21 | (Rm)<<16 | 1<<10 | (Rn)<<5 | (Rd))

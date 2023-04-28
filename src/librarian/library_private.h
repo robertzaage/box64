@@ -62,7 +62,6 @@ typedef struct library_s {
     char*               path;   // original path
     int                 nbdot;  // nombre of "." after .so
     int                 type;   // 0: native(wrapped) 1: emulated(elf) -1: undetermined
-    int                 active;
     wrappedlib_fini_t   fini;
     wrappedlib_get_t    getglobal;  // get global (non-weak)
     wrappedlib_get_t    getweak;    // get weak symbol
@@ -75,6 +74,7 @@ typedef struct library_s {
     kh_bridgemap_t      *gbridgemap;    // global symbol bridgemap
     kh_bridgemap_t      *wbridgemap;    // weak symbol bridgemap
     kh_bridgemap_t      *lbridgemap;    // local symbol bridgemap
+    int                 dlopen;   // idx to the dlopen idx (or 0 if not dlopen)
 } library_t;
 
 // type for map elements
@@ -109,7 +109,13 @@ typedef struct linkmap_s {
 } linkmap_t;
 
 linkmap_t* getLinkMapLib(library_t* lib);
+linkmap_t* getLinkMapElf(elfheader_t* h);
 linkmap_t* addLinkMapLib(library_t* lib);
 void removeLinkMapLib(library_t* lib);
+
+int FiniLibrary(library_t* lib, x64emu_t* emu);
+void Free1Library(library_t **lib, x64emu_t* emu);
+
+void RemoveDlopen(library_t** lib, int idx); // defined in wrappedlibdl.c
 
 #endif //__LIBRARY_PRIVATE_H_

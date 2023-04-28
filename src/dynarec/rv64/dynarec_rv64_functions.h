@@ -6,6 +6,8 @@
 typedef struct x64emu_s x64emu_t;
 typedef struct dynarec_rv64_s dynarec_rv64_t;
 
+#define SCRATCH0    2
+
 // Get an FPU scratch reg
 int fpu_get_scratch(dynarec_rv64_t* dyn);
 // Reset scratch regs counter
@@ -35,12 +37,16 @@ void extcache_promote_double(dynarec_rv64_t* dyn, int ninst, int a);
 // Combine and propagate if needed (pass 1 only)
 int extcache_combine_st(dynarec_rv64_t* dyn, int ninst, int a, int b);  // with stack current dyn->n_stack*
 
-// FPU Cache transformation (for loops) // Specific, need to be writen par backend
+// FPU Cache transformation (for loops) // Specific, need to be written par backend
 int fpuCacheNeedsTransform(dynarec_rv64_t* dyn, int ninst);
 
 // Undo the changes of a extcache to get the status before the instruction
 void extcacheUnwind(extcache_t* cache);
 
 const char* getCacheName(int t, int n);
+
+void inst_name_pass3(dynarec_native_t* dyn, int ninst, const char* name);
+void print_opcode(dynarec_native_t* dyn, int ninst, uint32_t opcode);
+void print_newinst(dynarec_native_t* dyn, int ninst);
 
 #endif //__DYNAREC_RV64_FUNCTIONS_H__
